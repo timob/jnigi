@@ -524,6 +524,7 @@ const (
 	Void = Type(1 << iota)
 	Boolean
 	Byte
+	Char
 	Short
 	Int
 	Long
