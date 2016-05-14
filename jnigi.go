@@ -45,6 +45,14 @@ func (o *ObjectRef) IsNil() bool {
 	return o.jobject == 0
 }
 
+func (o *ObjectRef) IsInstanceOf(env *Env, className string) (bool, error) {
+	class, err := env.callFindClass(className)
+	if err != nil {
+		return false, err
+	}
+	return toBool(isInstanceOf(env.jniEnv, o.jobject, class)), nil
+}
+
 type Env struct {
 	jniEnv     unsafe.Pointer
 	preCalcSig string

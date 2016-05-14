@@ -179,3 +179,31 @@ func TestObjectArrays(t *testing.T) {
 	}
 	t.Logf("%s", v.([]byte))
 }
+
+func TestInstanceOf(t *testing.T) {
+	alist, err := env.NewObject("java/util/ArrayList")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	str, err := env.NewObject("java/lang/String")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = alist.CallMethod(env, "add", Boolean, str.Cast("java/lang/Object"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	v, err := alist.CallMethod(env, "get", "java/lang/Object", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	obj := v.(*ObjectRef)
+
+	if v, err := obj.IsInstanceOf(env, "java/lang/String"); err != nil {
+		t.Fatal(err)
+	} else if !v {
+		t.Fatal("instanceof test failed")
+	}
+}
