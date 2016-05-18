@@ -120,13 +120,13 @@ func TestAttach(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	env.MakeGlobal(obj)
+	gObj := env.NewGlobalRef(obj)
 
 	go func() {
 		nenv := jvm.AttachCurrentThread()
 		t.Logf("%x", nenv.jniEnv)
 
-		v, err := obj.CallMethod(nenv, "hashCode", Int)
+		v, err := gObj.CallMethod(nenv, "hashCode", Int)
 		if err != nil {
 			t.Fatal(err)
 		}

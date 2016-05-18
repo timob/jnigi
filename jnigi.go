@@ -1117,10 +1117,9 @@ func (j *Env) RegisterNative(className, methodName string, returnType interface{
 	return nil
 }
 
-func (j *Env) MakeGlobal(o *ObjectRef) {
+func (j *Env) NewGlobalRef(o *ObjectRef) *ObjectRef {
 	g := newGlobalRef(j.jniEnv, o.jobject)
-	deleteLocalRef(j.jniEnv, o.jobject)
-	o.jobject = g
+	return &ObjectRef{g, o.className, o.isArray}
 }
 
 func (j *Env) DeleteGlobalRef(o *ObjectRef) {
