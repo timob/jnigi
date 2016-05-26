@@ -1178,10 +1178,3 @@ func detachCurrentThread(vm unsafe.Pointer) jint {
 	return jint(C.DetachCurrentThread((*C.JavaVM)(vm)))
 }
 
-func jni_GetDefaultJavaVMInitArgs(args unsafe.Pointer) jint {
-	return jint(C.JNI_GetDefaultJavaVMInitArgs((unsafe.Pointer)(args)))
-}
-
-func jni_CreateJavaVM(pvm unsafe.Pointer, penv unsafe.Pointer, args unsafe.Pointer) jint {
-	return jint(C.JNI_CreateJavaVM((**C.JavaVM)(pvm), (*unsafe.Pointer)(penv), (unsafe.Pointer)(args)))
-}
