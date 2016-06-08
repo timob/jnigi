@@ -372,14 +372,16 @@ func (j *Env) toJavaArray(src interface{}) (jobject, error) {
 		if ba == 0 {
 			return 0, j.handleException()
 		}
-		ptr := malloc(uintptr(len(v)))
-		data := (*(*[big]byte)(ptr))[:len(v)]
-		copy(data, v)
-		setByteArrayRegion(j.jniEnv, ba, jsize(0), jsize(len(v)), ptr)
+//		ptr := malloc(uintptr(len(v)))
+//		data := (*(*[big]byte)(ptr))[:len(v)]
+//		copy(data, v)
+		if len(v) > 0 {
+			setByteArrayRegion(j.jniEnv, ba, jsize(0), jsize(len(v)), unsafe.Pointer(&v[0]))
+		}
 		if j.exceptionCheck() {
 			return 0, j.handleException()
 		}
-		free(ptr)
+//		free(ptr)
 		return jobject(ba), nil
 	case []int16:
 		array := newShortArray(j.jniEnv, jsize(len(v)))
