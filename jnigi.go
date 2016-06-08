@@ -344,6 +344,33 @@ func (j *Env) ToObjectArray(objRefs []*ObjectRef, className string) (arrayRef *O
 	return
 }
 
+type ByteArray struct {
+	arr jbyteArray
+	n int
+}
+
+func (j *Env) NewByteArray(n int) *ByteArray {
+	a := newByteArray(j.jniEnv, jsize(n))
+	b := newGlobalRef(j.jniEnv, jobject(a))
+	return &ByteArray{jbyteArray(b), n}
+}
+
+func (b *ByteArray) GetCritical(env *Env) []byte {
+	if b.n == 0 {
+		return nil
+	}
+	ptr := getPrimitiveArrayCritical(env.jniEnv, jarray(b.arr), nil)
+	return (*(*[big]byte)(ptr))[0:b.n]
+}
+
+func (b *ByteArray) ReleaseCritical(env *Env, bytes []byte) {
+	if len(bytes) == 0 {
+		return
+	}
+	ptr := unsafe.Pointer(&bytes[0])
+	releasePrimitiveArrayCritical(env.jniEnv, jarray(b.arr), ptr, 0)
+}
+
 // this copies slice contents in to C memory before passing this pointer to JNI array function
 func (j *Env) toJavaArray(src interface{}) (jobject, error) {
 	switch v := src.(type) {
@@ -497,6 +524,8 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 			} else {
 				err = arrayErr
 			}
+		case *ByteArray:
+			argList[i] = uint64(v.arr)
 		default:
 			err = fmt.Errorf("JNIGI: argument not a valid value %t (%v)", args[i], args[i])
 		}
@@ -598,6 +627,8 @@ func typeOfValue(value interface{}) (t Type, className string, err error) {
 		t = Float | Array
 	case []float64:
 		t = Double | Array
+	case *ByteArray:
+		t = Byte | Array
 	default:
 		err = fmt.Errorf("JNIGI: unknown type %t (%v)", v, v)
 	}

@@ -207,3 +207,17 @@ func TestInstanceOf(t *testing.T) {
 		t.Fatal("instanceof test failed")
 	}
 }
+
+func TestByteArray(t *testing.T) {
+	ba := env.NewByteArray(5)
+	bytes := ba.GetCritical(env)
+	copy(bytes, []byte("hello"))
+	ba.ReleaseCritical(env, bytes)
+	str, err := env.NewObject("java/lang/String", ba)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if toGoStr(t, str) != "hello" {
+		t.Fatal("ByteArray test failed")
+	}
+}
