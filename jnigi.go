@@ -53,6 +53,8 @@ func (o *ObjectRef) IsInstanceOf(env *Env, className string) (bool, error) {
 	return toBool(isInstanceOf(env.jniEnv, o.jobject, class)), nil
 }
 
+var classCache map[string]jclass = make(map[string]jclass)
+
 type Env struct {
 	jniEnv     unsafe.Pointer
 	preCalcSig string
@@ -130,7 +132,6 @@ func (j *Env) NewObject(className string, args ...interface{}) (*ObjectRef, erro
 	if err != nil {
 		return nil, err
 	}
-	defer deleteLocalRef(j.jniEnv, jobject(class))
 
 	var methodSig string
 	if j.preCalcSig != "" {
@@ -170,13 +171,19 @@ func (j *Env) NewObject(className string, args ...interface{}) (*ObjectRef, erro
 }
 
 func (j *Env) callFindClass(className string) (jclass, error) {
+	if v, ok := classCache[className]; ok {
+		return v, nil
+	}
 	cnCstr := cString(className)
 	defer free(cnCstr)
 	class := findClass(j.jniEnv, cnCstr)
 	if class == 0 {
 		return 0, j.handleException()
 	}
-	return class, nil
+	ref := newGlobalRef(j.jniEnv, jobject(class))
+	deleteLocalRef(j.jniEnv, jobject(class))
+
+	return jclass(ref), nil
 }
 
 func (j *Env) callGetMethodID(static bool, class jclass, name, sig string) (jmethodID, error) {
@@ -326,7 +333,6 @@ func (j *Env) ToObjectArray(objRefs []*ObjectRef, className string) (arrayRef *O
 		exceptionClear(j.jniEnv)
 		return
 	}
-	defer deleteLocalRef(j.jniEnv, jobject(class))
 
 	oa := newObjectArray(j.jniEnv, jsize(len(objRefs)), class, 0)
 	if oa == 0 {
@@ -676,11 +682,10 @@ func sigForMethod(returnType Type, returnClass string, args []interface{}) (stri
 }
 
 func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface{}, args ...interface{}) (interface{}, error) {
-	class := getObjectClass(env.jniEnv, o.jobject)
-	if class == 0 {
-		return nil, env.handleException()
+	class, err := env.callFindClass(o.className)
+	if err != nil {
+		return nil, err
 	}
-	defer deleteLocalRef(env.jniEnv, jobject(class))
 
 	rType, rClassName, err := typeOfValue(returnType)
 	if err != nil {
@@ -766,7 +771,6 @@ func (j *Env) CallStaticMethod(className string, methodName string, returnType i
 	if err != nil {
 		return nil, err
 	}
-	defer deleteLocalRef(j.jniEnv, jobject(class))
 
 	rType, rClassName, err := typeOfValue(returnType)
 	if err != nil {
@@ -1000,7 +1004,6 @@ func (j *Env) GetStaticField(className string, fieldName string, fieldType inter
 	if err != nil {
 		return nil, err
 	}
-	defer deleteLocalRef(j.jniEnv, jobject(class))
 
 	fType, fClassName, err := typeOfValue(fieldType)
 	if err != nil {
@@ -1068,7 +1071,6 @@ func (j *Env) SetStaticField(className string, fieldName string, value interface
 	if err != nil {
 		return err
 	}
-	defer deleteLocalRef(j.jniEnv, jobject(class))
 
 	vType, vClassName, err := typeOfValue(value)
 	if err != nil {
@@ -1128,7 +1130,6 @@ func (j *Env) RegisterNative(className, methodName string, returnType interface{
 	if err != nil {
 		return err
 	}
-	defer deleteLocalRef(j.jniEnv, jobject(class))
 
 	mnCstr := cString(methodName)
 	defer free(mnCstr)
