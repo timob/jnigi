@@ -357,8 +357,24 @@ type ByteArray struct {
 
 func (j *Env) NewByteArray(n int) *ByteArray {
 	a := newByteArray(j.jniEnv, jsize(n))
-	b := newGlobalRef(j.jniEnv, jobject(a))
-	return &ByteArray{jbyteArray(b), n}
+	return &ByteArray{a, n}
+}
+
+func (j *Env) NewByteArrayFromSlice(src []byte) *ByteArray {
+	b := j.NewByteArray(len(src))
+	if len(src) > 0 {
+		bytes := b.GetCritical(j)
+		copy(bytes, src)
+		b.ReleaseCritical(j, bytes)
+	}
+	return b
+}
+
+func (j *Env) NewByteArrayFromObject(o *ObjectRef) *ByteArray {
+	ba := &ByteArray{}
+	ba.SetObject(o)
+	ba.n = int(getArrayLength(j.jniEnv, jarray(ba.arr)))
+	return ba
 }
 
 func (b *ByteArray) GetCritical(env *Env) []byte {
@@ -375,6 +391,23 @@ func (b *ByteArray) ReleaseCritical(env *Env, bytes []byte) {
 	}
 	ptr := unsafe.Pointer(&bytes[0])
 	releasePrimitiveArrayCritical(env.jniEnv, jarray(b.arr), ptr, 0)
+}
+
+//returns jlo
+func (b *ByteArray) GetObject() *ObjectRef {
+	return &ObjectRef{jobject(b.arr), "java/lang/Object", false}
+}
+
+func (b *ByteArray) SetObject(o *ObjectRef) {
+	b.arr = jbyteArray(o.jobject)
+}
+
+func (b *ByteArray) CopyBytes(env *Env) []byte {
+	r := make([]byte, b.n)
+	src := b.GetCritical(env)
+	copy(r, src)
+	b.ReleaseCritical(env, src)
+	return r
 }
 
 // this copies slice contents in to C memory before passing this pointer to JNI array function
