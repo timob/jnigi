@@ -272,6 +272,7 @@ func (j *Env) toGoArray(array jobject, aType Type) (interface{}, error) {
 			releaseShortArrayElements(j.jniEnv, jshortArray(array), ptr, jint(jni_abort))
 		}
 		return v, nil
+	// should change this to return []int32
 	case Int:
 		v := make([]int, len)
 		if len >= 0 {
@@ -279,8 +280,11 @@ func (j *Env) toGoArray(array jobject, aType Type) (interface{}, error) {
 			if j.exceptionCheck() {
 				return nil, j.handleException()
 			}
-			elems := (*(*[big]int)(ptr))[0:len]
-			copy(v, elems)
+			elems := (*(*[big]int32)(ptr))[0:len]
+			//copy(v, elems)
+			for i := 0; i < len; i++ {
+				v[i] = int(elems[i])
+			}
 			releaseIntArrayElements(j.jniEnv, jintArray(array), ptr, jint(jni_abort))
 		}
 		return v, nil
@@ -463,14 +467,31 @@ func (j *Env) toJavaArray(src interface{}) (jobject, error) {
 		}
 		free(ptr)
 		return jobject(array), nil
+	case []int32:
+		array := newIntArray(j.jniEnv, jsize(len(v)))
+		if array == 0 {
+			return 0, j.handleException()
+		}
+		ptr := malloc(unsafe.Sizeof(int32(0)) * uintptr(len(v)))
+		data := (*(*[big]int32)(ptr))[:len(v)]
+		copy(data, v)
+		setIntArrayRegion(j.jniEnv, array, jsize(0), jsize(len(v)), ptr)
+		if j.exceptionCheck() {
+			return 0, j.handleException()
+		}
+		free(ptr)
+		return jobject(array), nil
 	case []int:
 		array := newIntArray(j.jniEnv, jsize(len(v)))
 		if array == 0 {
 			return 0, j.handleException()
 		}
-		ptr := malloc(unsafe.Sizeof(int(0)) * uintptr(len(v)))
-		data := (*(*[big]int)(ptr))[:len(v)]
-		copy(data, v)
+		ptr := malloc(unsafe.Sizeof(int32(0)) * uintptr(len(v)))
+		data := (*(*[big]int32)(ptr))[:len(v)]
+		//copy(data, v)
+		for i := 0; i < len(data); i++ {
+			data[i] = int32(v[i])
+		}
 		setIntArrayRegion(j.jniEnv, array, jsize(0), jsize(len(v)), ptr)
 		if j.exceptionCheck() {
 			return 0, j.handleException()
@@ -548,8 +569,10 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 			argList[i] = uint64(jbyte(v))
 		case int16:
 			argList[i] = uint64(jshort(v))
-		case int:
+		case int32:
 			argList[i] = uint64(jint(v))
+		case int:
+			argList[i] = uint64(jint(int32(v)))
 		case int64:
 			argList[i] = uint64(jlong(v))
 		case float32:
