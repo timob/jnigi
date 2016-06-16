@@ -64,12 +64,11 @@ type jobj interface {
 	jobj() jobject
 }
 
-var classCache map[string]jclass = make(map[string]jclass)
-
 type Env struct {
 	jniEnv     unsafe.Pointer
 	preCalcSig string
 	noReturnConvert bool
+	classCache map[string]jclass
 }
 
 type JVM struct {
@@ -90,7 +89,7 @@ func CreateJVM(jvmInitArgs *JVMInitArgs) (*JVM, *Env, error) {
 		return nil, nil, errors.New("Couldn't instantiate JVM")
 	}
 	jvm := &JVM{*(*unsafe.Pointer)(p2)}
-	env := &Env{jniEnv: *(*unsafe.Pointer)(p)}
+	env := &Env{jniEnv: *(*unsafe.Pointer)(p), classCache: make(map[string]jclass)}
 
 	free(p)
 	free(p2)
@@ -107,7 +106,7 @@ func (j *JVM) AttachCurrentThread() *Env {
 		panic("AttachCurrentThread failed")
 	}
 
-	return &Env{jniEnv: *(*unsafe.Pointer)(p)}
+	return &Env{jniEnv: *(*unsafe.Pointer)(p), classCache: make(map[string]jclass)}
 }
 
 func (j *JVM) DetachCurrentThread() error {
@@ -183,7 +182,7 @@ func (j *Env) NewObject(className string, args ...interface{}) (*ObjectRef, erro
 }
 
 func (j *Env) callFindClass(className string) (jclass, error) {
-	if v, ok := classCache[className]; ok {
+	if v, ok := j.classCache[className]; ok {
 		return v, nil
 	}
 	cnCstr := cString(className)
@@ -194,7 +193,8 @@ func (j *Env) callFindClass(className string) (jclass, error) {
 	}
 	ref := newGlobalRef(j.jniEnv, jobject(class))
 	deleteLocalRef(j.jniEnv, jobject(class))
-
+	j.classCache[className] = jclass(ref)
+	
 	return jclass(ref), nil
 }
 
