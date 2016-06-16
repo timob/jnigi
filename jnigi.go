@@ -53,11 +53,20 @@ func (o *ObjectRef) IsInstanceOf(env *Env, className string) (bool, error) {
 	return toBool(isInstanceOf(env.jniEnv, o.jobject, class)), nil
 }
 
+func (o *ObjectRef) jobj() jobject {
+	return o.jobject
+}
+
+type jobj interface {
+	jobj() jobject
+}
+
 var classCache map[string]jclass = make(map[string]jclass)
 
 type Env struct {
 	jniEnv     unsafe.Pointer
 	preCalcSig string
+	noReturnConvert bool
 }
 
 type JVM struct {
@@ -211,6 +220,10 @@ func (j *Env) PrecalculateSignature(sig string) {
 	j.preCalcSig = sig
 }
 
+func (j *Env) NoReturnConvert() {
+	j.noReturnConvert = true
+}
+
 const big = 1024 * 1024 * 100
 
 func (j *Env) FromObjectArray(objRef *ObjectRef) []*ObjectRef {
@@ -272,7 +285,18 @@ func (j *Env) toGoArray(array jobject, aType Type) (interface{}, error) {
 			releaseShortArrayElements(j.jniEnv, jshortArray(array), ptr, jint(jni_abort))
 		}
 		return v, nil
-	// should change this to return []int32
+	case Char:
+		v := make([]uint16, len)
+		if len >= 0 {
+			ptr := getCharArrayElements(j.jniEnv, jcharArray(array), nil)
+			if j.exceptionCheck() {
+				return nil, j.handleException()
+			}
+			elems := (*(*[big]uint16)(ptr))[0:len]
+			copy(v, elems)
+			releaseCharArrayElements(j.jniEnv, jcharArray(array), ptr, jint(jni_abort))
+		}
+		return v, nil
 	case Int:
 		v := make([]int, len)
 		if len >= 0 {
@@ -381,6 +405,14 @@ func (j *Env) NewByteArrayFromObject(o *ObjectRef) *ByteArray {
 	return ba
 }
 
+func (b *ByteArray) jobj() jobject {
+	return jobject(b.arr)
+}
+
+func (b *ByteArray) getType() Type {
+	return Byte | Array
+}
+
 func (b *ByteArray) GetCritical(env *Env) []byte {
 	if b.n == 0 {
 		return nil
@@ -462,6 +494,20 @@ func (j *Env) toJavaArray(src interface{}) (jobject, error) {
 		data := (*(*[big]int16)(ptr))[:len(v)]
 		copy(data, v)
 		setShortArrayRegion(j.jniEnv, array, jsize(0), jsize(len(v)), ptr)
+		if j.exceptionCheck() {
+			return 0, j.handleException()
+		}
+		free(ptr)
+		return jobject(array), nil
+	case []uint16:
+		array := newCharArray(j.jniEnv, jsize(len(v)))
+		if array == 0 {
+			return 0, j.handleException()
+		}
+		ptr := malloc(unsafe.Sizeof(uint16(0)) * uintptr(len(v)))
+		data := (*(*[big]uint16)(ptr))[:len(v)]
+		copy(data, v)
+		setCharArrayRegion(j.jniEnv, array, jsize(0), jsize(len(v)), ptr)
 		if j.exceptionCheck() {
 			return 0, j.handleException()
 		}
@@ -557,8 +603,8 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 
 	for i, arg := range args {
 		switch v := arg.(type) {
-		case *ObjectRef:
-			argList[i] = uint64(v.jobject)
+		case jobj:
+			argList[i] = uint64(v.jobj())
 		case bool:
 			if v {
 				argList[i] = uint64(jboolean(1))
@@ -567,6 +613,8 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 			}
 		case byte:
 			argList[i] = uint64(jbyte(v))
+		case uint16:
+			argList[i] = uint64(jchar(v))
 		case int16:
 			argList[i] = uint64(jshort(v))
 		case int32:
@@ -579,15 +627,13 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 			argList[i] = uint64(jfloat(v))
 		case float64:
 			argList[i] = uint64(jdouble(v))
-		case []bool, []byte, []int16, []int, []int64, []float32, []float64:
+		case []bool, []byte, []int16, []uint16, []int32, []int, []int64, []float32, []float64:
 			if array, arrayErr := j.toJavaArray(v); arrayErr == nil {
 				argList[i] = uint64(array)
 				refs = append(refs, array)
 			} else {
 				err = arrayErr
 			}
-		case *ByteArray:
-			argList[i] = uint64(v.arr)
 		default:
 			err = fmt.Errorf("JNIGI: argument not a valid value %t (%v)", args[i], args[i])
 		}
@@ -639,6 +685,10 @@ type ObjectType string
 
 type ObjectArrayType string
 
+type convertedArray interface {
+	getType() Type
+}
+
 func typeOfValue(value interface{}) (t Type, className string, err error) {
 	switch v := value.(type) {
 	case Type:
@@ -667,6 +717,10 @@ func typeOfValue(value interface{}) (t Type, className string, err error) {
 		t = Byte
 	case int16:
 		t = Short
+	case uint16:
+		t = Char
+	case int32:
+		t = Int
 	case int:
 		t = Int
 	case int64:
@@ -677,20 +731,34 @@ func typeOfValue(value interface{}) (t Type, className string, err error) {
 		t = Double
 	case []bool:
 		t = Boolean | Array
+		className = "java/lang/Object"
 	case []byte:
 		t = Byte | Array
+		className = "java/lang/Object"
+	case []uint16:
+		t = Char | Array
+		className = "java/lang/Object"
 	case []int16:
 		t = Short | Array
+		className = "java/lang/Object"
+	case []int32:
+		t = Int | Array
+		className = "java/lang/Object"
 	case []int:
 		t = Int | Array
+		className = "java/lang/Object"
 	case []int64:
 		t = Long | Array
+		className = "java/lang/Object"
 	case []float32:
 		t = Float | Array
+		className = "java/lang/Object"
 	case []float64:
 		t = Double | Array
-	case *ByteArray:
-		t = Byte | Array
+		className = "java/lang/Object"
+	case convertedArray:
+		t = v.getType()
+		className = "java/lang/Object"
 	default:
 		err = fmt.Errorf("JNIGI: unknown type %t (%v)", v, v)
 	}
@@ -711,6 +779,8 @@ func typeSignature(t Type, className string) (sig string) {
 		sig += "Z"
 	case base == Byte:
 		sig += "B"
+	case base == Char:
+		sig += "C"
 	case base == Short:
 		sig += "S"
 	case base == Int:
@@ -787,6 +857,8 @@ func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface
 		retVal = toBool(callBooleanMethodA(env.jniEnv, o.jobject, mid, jniArgs))
 	case rType == Byte:
 		retVal = byte(callByteMethodA(env.jniEnv, o.jobject, mid, jniArgs))
+	case rType == Char:
+		retVal = uint16(callCharMethodA(env.jniEnv, o.jobject, mid, jniArgs))
 	case rType == Short:
 		retVal = int16(callShortMethodA(env.jniEnv, o.jobject, mid, jniArgs))
 	case rType == Int:
@@ -799,7 +871,7 @@ func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface
 		retVal = float64(callDoubleMethodA(env.jniEnv, o.jobject, mid, jniArgs))
 	case rType == Object || rType.isArray():
 		obj := callObjectMethodA(env.jniEnv, o.jobject, mid, jniArgs)
-		if rType == Object || rType == Object|Array {
+		if rType == Object || rType == Object|Array || env.noReturnConvert {
 			retVal = &ObjectRef{obj, rClassName, rType.isArray()}
 		} else {
 			arrayToConvert = obj
@@ -807,6 +879,8 @@ func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface
 	default:
 		return nil, errors.New("JNIGI unknown return type")
 	}
+
+	env.noReturnConvert = false
 
 	if env.exceptionCheck() {
 		return nil, env.handleException()
@@ -872,6 +946,8 @@ func (j *Env) CallStaticMethod(className string, methodName string, returnType i
 		retVal = toBool(callStaticBooleanMethodA(j.jniEnv, class, mid, jniArgs))
 	case rType == Byte:
 		retVal = byte(callStaticByteMethodA(j.jniEnv, class, mid, jniArgs))
+	case rType == Char:
+		retVal = uint16(callStaticCharMethodA(j.jniEnv, class, mid, jniArgs))
 	case rType == Short:
 		retVal = int16(callStaticShortMethodA(j.jniEnv, class, mid, jniArgs))
 	case rType == Int:
@@ -884,7 +960,7 @@ func (j *Env) CallStaticMethod(className string, methodName string, returnType i
 		retVal = float64(callStaticDoubleMethodA(j.jniEnv, class, mid, jniArgs))
 	case rType == Object || rType.isArray():
 		obj := callStaticObjectMethodA(j.jniEnv, class, mid, jniArgs)
-		if rType == Object || rType == Object|Array {
+		if rType == Object || rType == Object|Array || j.noReturnConvert {
 			retVal = &ObjectRef{obj, rClassName, rType.isArray()}
 		} else {
 			arrayToConvert = obj
@@ -892,6 +968,8 @@ func (j *Env) CallStaticMethod(className string, methodName string, returnType i
 	default:
 		return nil, errors.New("JNIGI unknown return type")
 	}
+
+	j.noReturnConvert = false
 
 	if j.exceptionCheck() {
 		return nil, j.handleException()
@@ -960,6 +1038,8 @@ func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}) 
 		retVal = toBool(getBooleanField(env.jniEnv, o.jobject, fid))
 	case fType == Byte:
 		retVal = byte(getByteField(env.jniEnv, o.jobject, fid))
+	case fType == Char:
+		retVal = uint16(getCharField(env.jniEnv, o.jobject, fid))
 	case fType == Short:
 		retVal = int16(getShortField(env.jniEnv, o.jobject, fid))
 	case fType == Int:
@@ -972,7 +1052,7 @@ func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}) 
 		retVal = float64(getDoubleField(env.jniEnv, o.jobject, fid))
 	case fType == Object || fType.isArray():
 		obj := getObjectField(env.jniEnv, o.jobject, fid)
-		if fType == Object || fType == Object|Array {
+		if fType == Object || fType == Object|Array || env.noReturnConvert {
 			retVal = &ObjectRef{obj, fClassName, fType.isArray()}
 		} else {
 			arrayToConvert = obj
@@ -980,6 +1060,8 @@ func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}) 
 	default:
 		return nil, errors.New("JNIGI unknown field type")
 	}
+
+	env.noReturnConvert = false
 
 	if env.exceptionCheck() {
 		return nil, env.handleException()
@@ -1025,19 +1107,23 @@ func (o *ObjectRef) SetField(env *Env, fieldName string, value interface{}) erro
 		setBooleanField(env.jniEnv, o.jobject, fid, fromBool(v))
 	case byte:
 		setByteField(env.jniEnv, o.jobject, fid, jbyte(v))
+	case uint16:
+		setCharField(env.jniEnv, o.jobject, fid, jchar(v))
 	case int16:
 		setShortField(env.jniEnv, o.jobject, fid, jshort(v))
-	case int:
+	case int32:
 		setIntField(env.jniEnv, o.jobject, fid, jint(v))
+	case int:
+		setIntField(env.jniEnv, o.jobject, fid, jint(int32(v)))
 	case int64:
 		setLongField(env.jniEnv, o.jobject, fid, jlong(v))
 	case float32:
 		setFloatField(env.jniEnv, o.jobject, fid, jfloat(v))
 	case float64:
 		setDoubleField(env.jniEnv, o.jobject, fid, jdouble(v))
-	case *ObjectRef:
-		setObjectField(env.jniEnv, o.jobject, fid, jobject(v.jobject))
-	case []bool, []byte, []int16, []int, []int64, []float32, []float64:
+	case jobj:
+		setObjectField(env.jniEnv, o.jobject, fid, v.jobj())
+	case []bool, []byte, []int16, []uint16, []int32, []int, []int64, []float32, []float64:
 		array, err := env.toJavaArray(v)
 		if err != nil {
 			return err
@@ -1087,6 +1173,8 @@ func (j *Env) GetStaticField(className string, fieldName string, fieldType inter
 		retVal = toBool(getStaticBooleanField(j.jniEnv, class, fid))
 	case fType == Byte:
 		retVal = byte(getStaticByteField(j.jniEnv, class, fid))
+	case fType == Char:
+		retVal = uint16(getStaticCharField(j.jniEnv, class, fid))
 	case fType == Short:
 		retVal = int16(getStaticShortField(j.jniEnv, class, fid))
 	case fType == Int:
@@ -1099,7 +1187,7 @@ func (j *Env) GetStaticField(className string, fieldName string, fieldType inter
 		retVal = float64(getStaticDoubleField(j.jniEnv, class, fid))
 	case fType == Object || fType.isArray():
 		obj := getStaticObjectField(j.jniEnv, class, fid)
-		if fType == Object || fType == Object|Array {
+		if fType == Object || fType == Object|Array || j.noReturnConvert {
 			retVal = &ObjectRef{obj, fClassName, fType.isArray()}
 		} else {
 			arrayToConvert = obj
@@ -1107,6 +1195,8 @@ func (j *Env) GetStaticField(className string, fieldName string, fieldType inter
 	default:
 		return nil, errors.New("JNIGI unknown field type")
 	}
+
+	j.noReturnConvert = false
 
 	if j.exceptionCheck() {
 		return nil, j.handleException()
@@ -1151,19 +1241,23 @@ func (j *Env) SetStaticField(className string, fieldName string, value interface
 		setStaticBooleanField(j.jniEnv, class, fid, fromBool(v))
 	case byte:
 		setStaticByteField(j.jniEnv, class, fid, jbyte(v))
+	case uint16:
+		setStaticCharField(j.jniEnv, class, fid, jchar(v))
 	case int16:
 		setStaticShortField(j.jniEnv, class, fid, jshort(v))
-	case int:
+	case int32:
 		setStaticIntField(j.jniEnv, class, fid, jint(v))
+	case int:
+		setStaticIntField(j.jniEnv, class, fid, jint(int32(v)))
 	case int64:
 		setStaticLongField(j.jniEnv, class, fid, jlong(v))
 	case float32:
 		setStaticFloatField(j.jniEnv, class, fid, jfloat(v))
 	case float64:
 		setStaticDoubleField(j.jniEnv, class, fid, jdouble(v))
-	case *ObjectRef:
-		setStaticObjectField(j.jniEnv, class, fid, jobject(v.jobject))
-	case []bool, []byte, []int16, []int, []int64, []float32, []float64:
+	case jobj:
+		setStaticObjectField(j.jniEnv, class, fid, v.jobj())
+	case []bool, []byte, []int16, []uint16, []int32, []int, []int64, []float32, []float64:
 		array, err := j.toJavaArray(v)
 		if err != nil {
 			return err

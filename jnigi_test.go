@@ -111,6 +111,25 @@ func TestBasic(t *testing.T) {
 	if i, ok := v.(int); !ok || i != 5 {
 		t.Logf("basic test failed")
 	}
+	
+	src := "fromChar"
+	dest := make([]uint16, len(src))
+	for i, c := range src {
+		dest[i] = uint16(c)
+	}
+	str, err = env.NewObject("java/lang/String", dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	v, err = str.CallMethod(env, "getBytes", Byte|Array, env.GetUTF8String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, ok := v.([]byte); !ok || string(b) != src {
+		t.Logf("basic test failed")
+	}
+	
 }
 
 func TestAttach(t *testing.T) {
@@ -220,4 +239,28 @@ func TestByteArray(t *testing.T) {
 	if toGoStr(t, str) != "hello" {
 		t.Fatal("ByteArray test failed")
 	}
+
+	testStr := "hello world"
+	str, err = env.NewObject("java/lang/String", []byte(testStr))
+	if err != nil {
+		t.Fatal(err)
+	}
+	
+	env.NoReturnConvert()
+	v, err := str.CallMethod(env, "getBytes", Byte|Array, env.GetUTF8String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o, ok := v.(*ObjectRef)
+	if !ok {
+		t.Logf("ByteArray test failed")
+	}
+
+	ba2 := env.NewByteArrayFromObject(o)
+	bytes = ba2.GetCritical(env)
+	if string(bytes) != "hello world" {
+		t.Logf("ByteArray test failed")
+	}
+	ba2.ReleaseCritical(env, bytes)
 }
