@@ -11,6 +11,9 @@ import (
 	"unsafe"
 )
 
+// copy arguments in to C memory before passing to jni functions
+var copyToC bool = false
+
 func toBool(b jboolean) bool {
 	return b == 1
 }
@@ -165,7 +168,7 @@ func (j *Env) NewObject(className string, args ...interface{}) (*ObjectRef, erro
 		return nil, err
 	}
 	defer func() {
-		free(jniArgs)
+		cleanUpArgs(jniArgs)
 		for _, ref := range refs {
 			deleteLocalRef(j.jniEnv, ref)
 		}
@@ -447,6 +450,7 @@ func (b *ByteArray) CopyBytes(env *Env) []byte {
 }
 
 // this copies slice contents in to C memory before passing this pointer to JNI array function
+// if copy var is set to true
 func (j *Env) toJavaArray(src interface{}) (jobject, error) {
 	switch v := src.(type) {
 	case []bool:
@@ -454,137 +458,211 @@ func (j *Env) toJavaArray(src interface{}) (jobject, error) {
 		if ba == 0 {
 			return 0, j.handleException()
 		}
-		ptr := malloc(uintptr(len(v)))
-		data := (*(*[big]byte)(ptr))[:len(v)]
+		if len(v) == 0 {
+			return jobject(ba), nil
+		}
 		src := make([]byte, len(v))
 		for i, vset := range v {
 			if vset {
 				src[i] = 1
 			}
 		}
-		copy(data, src)
+		var ptr unsafe.Pointer
+		if copyToC {
+			ptr = malloc(uintptr(len(v)))
+			defer free(ptr)
+			data := (*(*[big]byte)(ptr))[:len(v)]
+			copy(data, src)
+		} else {
+			ptr = unsafe.Pointer(&src[0])
+		}
 		setBooleanArrayRegion(j.jniEnv, ba, jsize(0), jsize(len(v)), ptr)
 		if j.exceptionCheck() {
 			return 0, j.handleException()
 		}
-		free(ptr)
 		return jobject(ba), nil
 	case []byte:
 		ba := newByteArray(j.jniEnv, jsize(len(v)))
 		if ba == 0 {
 			return 0, j.handleException()
 		}
-//		ptr := malloc(uintptr(len(v)))
-//		data := (*(*[big]byte)(ptr))[:len(v)]
-//		copy(data, v)
-		if len(v) > 0 {
-			setByteArrayRegion(j.jniEnv, ba, jsize(0), jsize(len(v)), unsafe.Pointer(&v[0]))
+		if len(v) == 0 {
+			return jobject(ba), nil
 		}
+		var ptr unsafe.Pointer
+		if copyToC {
+			ptr = malloc(uintptr(len(v)))
+		    defer free(ptr)
+			data := (*(*[big]byte)(ptr))[:len(v)]
+			copy(data, v)
+		} else {
+			ptr = unsafe.Pointer(&v[0])
+		}
+		setByteArrayRegion(j.jniEnv, ba, jsize(0), jsize(len(v)), ptr)
 		if j.exceptionCheck() {
 			return 0, j.handleException()
 		}
-//		free(ptr)
 		return jobject(ba), nil
 	case []int16:
 		array := newShortArray(j.jniEnv, jsize(len(v)))
 		if array == 0 {
 			return 0, j.handleException()
 		}
-		ptr := malloc(unsafe.Sizeof(int16(0)) * uintptr(len(v)))
-		data := (*(*[big]int16)(ptr))[:len(v)]
-		copy(data, v)
+		if len(v) == 0 {
+			return jobject(array), nil
+		}
+		var ptr unsafe.Pointer
+		if copyToC {
+			ptr = malloc(unsafe.Sizeof(int16(0)) * uintptr(len(v)))
+			defer free(ptr)
+			data := (*(*[big]int16)(ptr))[:len(v)]
+			copy(data, v)
+		} else {
+			ptr = unsafe.Pointer(&v[0])
+		}
 		setShortArrayRegion(j.jniEnv, array, jsize(0), jsize(len(v)), ptr)
 		if j.exceptionCheck() {
 			return 0, j.handleException()
 		}
-		free(ptr)
 		return jobject(array), nil
 	case []uint16:
 		array := newCharArray(j.jniEnv, jsize(len(v)))
 		if array == 0 {
 			return 0, j.handleException()
 		}
-		ptr := malloc(unsafe.Sizeof(uint16(0)) * uintptr(len(v)))
-		data := (*(*[big]uint16)(ptr))[:len(v)]
-		copy(data, v)
+		if len(v) == 0 {
+			return jobject(array), nil
+		}
+		var ptr unsafe.Pointer
+		if copyToC {
+			ptr = malloc(unsafe.Sizeof(uint16(0)) * uintptr(len(v)))
+			defer free(ptr)
+			data := (*(*[big]uint16)(ptr))[:len(v)]
+			copy(data, v)
+		} else {
+			ptr = unsafe.Pointer(&v[0])
+		}
 		setCharArrayRegion(j.jniEnv, array, jsize(0), jsize(len(v)), ptr)
 		if j.exceptionCheck() {
 			return 0, j.handleException()
 		}
-		free(ptr)
 		return jobject(array), nil
 	case []int32:
 		array := newIntArray(j.jniEnv, jsize(len(v)))
 		if array == 0 {
 			return 0, j.handleException()
 		}
-		ptr := malloc(unsafe.Sizeof(int32(0)) * uintptr(len(v)))
-		data := (*(*[big]int32)(ptr))[:len(v)]
-		copy(data, v)
+		if len(v) == 0 {
+			return jobject(array), nil
+		}
+		var ptr unsafe.Pointer
+		if copyToC {		
+			ptr = malloc(unsafe.Sizeof(int32(0)) * uintptr(len(v)))
+			defer free(ptr)
+			data := (*(*[big]int32)(ptr))[:len(v)]
+			copy(data, v)
+		} else {
+			ptr = unsafe.Pointer(&v[0])
+		}
 		setIntArrayRegion(j.jniEnv, array, jsize(0), jsize(len(v)), ptr)
 		if j.exceptionCheck() {
 			return 0, j.handleException()
 		}
-		free(ptr)
 		return jobject(array), nil
 	case []int:
 		array := newIntArray(j.jniEnv, jsize(len(v)))
 		if array == 0 {
 			return 0, j.handleException()
 		}
-		ptr := malloc(unsafe.Sizeof(int32(0)) * uintptr(len(v)))
-		data := (*(*[big]int32)(ptr))[:len(v)]
-		//copy(data, v)
-		for i := 0; i < len(data); i++ {
-			data[i] = int32(v[i])
+		if len(v) == 0 {
+			return jobject(array), nil
+		}
+		var ptr unsafe.Pointer
+		if copyToC {
+			ptr = malloc(unsafe.Sizeof(int32(0)) * uintptr(len(v)))
+			defer free(ptr)
+			data := (*(*[big]int32)(ptr))[:len(v)]
+			//copy(data, v)
+			for i := 0; i < len(data); i++ {
+				data[i] = int32(v[i])
+			}
+		} else {
+			data := make([]int32, len(v))
+			for i := 0; i < len(v); i++ {
+				data[i] = int32(v[i])
+			}
+			ptr = unsafe.Pointer(&data[0])
 		}
 		setIntArrayRegion(j.jniEnv, array, jsize(0), jsize(len(v)), ptr)
 		if j.exceptionCheck() {
 			return 0, j.handleException()
 		}
-		free(ptr)
 		return jobject(array), nil
 	case []int64:
 		array := newLongArray(j.jniEnv, jsize(len(v)))
 		if array == 0 {
 			return 0, j.handleException()
 		}
-		ptr := malloc(unsafe.Sizeof(int64(0)) * uintptr(len(v)))
-		data := (*(*[big]int64)(ptr))[:len(v)]
-		copy(data, v)
+		if len(v) == 0 {
+			return jobject(array), nil
+		}
+		var ptr unsafe.Pointer
+		if copyToC {
+			ptr = malloc(unsafe.Sizeof(int64(0)) * uintptr(len(v)))
+			defer free(ptr)
+			data := (*(*[big]int64)(ptr))[:len(v)]
+			copy(data, v)
+		} else {
+			ptr = unsafe.Pointer(&v[0])
+		}
 		setLongArrayRegion(j.jniEnv, array, jsize(0), jsize(len(v)), ptr)
 		if j.exceptionCheck() {
 			return 0, j.handleException()
 		}
-		free(ptr)
 		return jobject(array), nil
 	case []float32:
 		array := newFloatArray(j.jniEnv, jsize(len(v)))
 		if array == 0 {
 			return 0, j.handleException()
 		}
-		ptr := malloc(unsafe.Sizeof(float32(0)) * uintptr(len(v)))
-		data := (*(*[big]float32)(ptr))[:len(v)]
-		copy(data, v)
+		if len(v) == 0 {
+			return jobject(array), nil
+		}
+		var ptr unsafe.Pointer
+		if copyToC {
+			ptr = malloc(unsafe.Sizeof(float32(0)) * uintptr(len(v)))
+			defer free(ptr)
+			data := (*(*[big]float32)(ptr))[:len(v)]
+			copy(data, v)	
+		} else {
+			ptr = unsafe.Pointer(&v[0])
+		}
 		setFloatArrayRegion(j.jniEnv, array, jsize(0), jsize(len(v)), ptr)
 		if j.exceptionCheck() {
 			return 0, j.handleException()
-		}
-		free(ptr)
+		}		
 		return jobject(array), nil
 	case []float64:
 		array := newDoubleArray(j.jniEnv, jsize(len(v)))
 		if array == 0 {
 			return 0, j.handleException()
 		}
-		ptr := malloc(unsafe.Sizeof(float64(0)) * uintptr(len(v)))
-		data := (*(*[big]float64)(ptr))[:len(v)]
-		copy(data, v)
+		if len(v) == 0 {
+			return jobject(array), nil
+		}
+		var ptr unsafe.Pointer
+		if copyToC {
+			ptr = malloc(unsafe.Sizeof(float64(0)) * uintptr(len(v)))
+			defer free(ptr)
+			data := (*(*[big]float64)(ptr))[:len(v)]
+			copy(data, v)
+		} else {
+			ptr = unsafe.Pointer(&v[0])
+		}
 		setDoubleArrayRegion(j.jniEnv, array, jsize(0), jsize(len(v)), ptr)
 		if j.exceptionCheck() {
 			return 0, j.handleException()
-		}
-		free(ptr)
+		}		
 		return jobject(array), nil
 	default:
 		return 0, errors.New("JNIGI unsupported array type")
@@ -651,9 +729,13 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 		return
 	}
 
-	ptr = malloc(unsafe.Sizeof(uint64(0)) * uintptr(len(args)))
-	data := (*(*[big]uint64)(ptr))[:len(args)]
-	copy(data, argList)
+	if copyToC {
+		ptr = malloc(unsafe.Sizeof(uint64(0)) * uintptr(len(args)))
+		data := (*(*[big]uint64)(ptr))[:len(args)]
+		copy(data, argList)	
+	} else {
+		ptr = unsafe.Pointer(&argList[0])
+	}
 	return
 }
 
@@ -807,6 +889,12 @@ func sigForMethod(returnType Type, returnClass string, args []interface{}) (stri
 	return fmt.Sprintf("(%s)%s", paramStr, typeSignature(returnType, returnClass)), nil
 }
 
+func cleanUpArgs(ptr unsafe.Pointer) {
+	if copyToC {
+		free(ptr)
+	}
+}
+
 func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface{}, args ...interface{}) (interface{}, error) {
 	class, err := env.callFindClass(o.className)
 	if err != nil {
@@ -841,7 +929,7 @@ func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface
 		return nil, err
 	}
 	defer func() {
-		free(jniArgs)
+		cleanUpArgs(jniArgs)
 		for _, ref := range refs {
 			deleteLocalRef(env.jniEnv, ref)
 		}
@@ -930,7 +1018,7 @@ func (j *Env) CallStaticMethod(className string, methodName string, returnType i
 		return nil, err
 	}
 	defer func() {
-		free(jniArgs)
+		cleanUpArgs(jniArgs)
 		for _, ref := range refs {
 			deleteLocalRef(j.jniEnv, ref)
 		}
