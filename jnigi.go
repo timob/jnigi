@@ -1094,11 +1094,10 @@ func (j *Env) callGetFieldID(static bool, class jclass, name, sig string) (jfiel
 }
 
 func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}) (interface{}, error) {
-	class := getObjectClass(env.jniEnv, o.jobject)
-	if class == 0 {
-		return nil, env.handleException()
+	class, err := env.callFindClass(o.className)
+	if err != nil {
+		return nil, err
 	}
-	defer deleteLocalRef(env.jniEnv, jobject(class))
 
 	fType, fClassName, err := typeOfValue(fieldType)
 	if err != nil {
@@ -1166,11 +1165,10 @@ func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}) 
 }
 
 func (o *ObjectRef) SetField(env *Env, fieldName string, value interface{}) error {
-	class := getObjectClass(env.jniEnv, o.jobject)
-	if class == 0 {
-		return env.handleException()
+	class, err := env.callFindClass(o.className)
+	if err != nil {
+		return err
 	}
-	defer deleteLocalRef(env.jniEnv, jobject(class))
 
 	vType, vClassName, err := typeOfValue(value)
 	if err != nil {
