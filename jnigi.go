@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"runtime"
 	"unsafe"
+	"strings"
 )
 
 // copy arguments in to C memory before passing to jni functions
@@ -895,8 +896,62 @@ func cleanUpArgs(ptr unsafe.Pointer) {
 	}
 }
 
+func (o *ObjectRef) getClass(env *Env) (class jclass, err error) {
+	class, err = env.callFindClass(o.className)
+	if err != nil {
+		return 0, err
+	}
+
+	// if object is java/lang/Object try to up class it
+	// there is an odd way to get the class name see: http://stackoverflow.com/questions/12719766/can-i-know-the-name-of-the-class-that-calls-a-jni-c-method
+	if o.className == "java/lang/Object" {
+		mid, err := env.callGetMethodID(false, class, "getClass", "()Ljava/lang/Class;")
+		if err != nil {
+			return 0, err
+		}
+		obj := callObjectMethodA(env.jniEnv, o.jobject, mid, nil)
+		if env.exceptionCheck() {
+			return 0, env.handleException()
+		}
+		defer deleteLocalRef(env.jniEnv, obj)
+		objClass := getObjectClass(env.jniEnv, obj)
+		if objClass == 0 {
+			return 0, env.handleException()
+		}
+		defer deleteLocalRef(env.jniEnv, jobject(objClass))
+		mid, err = env.callGetMethodID(false, objClass, "getName", "()Ljava/lang/String;")
+		if err != nil {
+			return 0, err
+		}
+		obj2 := callObjectMethodA(env.jniEnv, obj, mid, nil)
+		if env.exceptionCheck() {
+			return 0, env.handleException()
+		}
+		strObj := WrapJObject(uintptr(obj2), "java/lang/String", false)
+		if strObj.IsNil() {
+			return 0, errors.New("unexpected error getting object class name")
+		}
+		defer env.DeleteLocalRef(strObj)
+		b , err := strObj.CallMethod(env, "getBytes", Byte | Array, env.GetUTF8String())
+		if err != nil {
+			return 0, err
+		}
+		gotClass := string(b.([]byte))
+		// note uses . for class name separator
+		if gotClass != "java.lang.Object" {
+			gotClass = strings.Replace(gotClass, ".", "/", -1)
+			class, err = env.callFindClass(gotClass)
+			if err == nil {
+				o.className = gotClass
+			}
+			return class, err
+		}
+	}
+	return
+}
+
 func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface{}, args ...interface{}) (interface{}, error) {
-	class, err := env.callFindClass(o.className)
+	class, err := o.getClass(env)
 	if err != nil {
 		return nil, err
 	}
@@ -1094,7 +1149,7 @@ func (j *Env) callGetFieldID(static bool, class jclass, name, sig string) (jfiel
 }
 
 func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}) (interface{}, error) {
-	class, err := env.callFindClass(o.className)
+	class, err := o.getClass(env)
 	if err != nil {
 		return nil, err
 	}
@@ -1165,7 +1220,7 @@ func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}) 
 }
 
 func (o *ObjectRef) SetField(env *Env, fieldName string, value interface{}) error {
-	class, err := env.callFindClass(o.className)
+	class, err := o.getClass(env)
 	if err != nil {
 		return err
 	}
