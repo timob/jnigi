@@ -61,6 +61,10 @@ func (o *ObjectRef) jobj() jobject {
 	return o.jobject
 }
 
+func (o *ObjectRef) JObject() jobject {
+	return o.jobj()
+}
+
 type jobj interface {
 	jobj() jobject
 }
@@ -70,6 +74,10 @@ type Env struct {
 	preCalcSig string
 	noReturnConvert bool
 	classCache map[string]jclass
+}
+
+func WrapEnv(envPtr unsafe.Pointer) *Env {
+	return &Env{jniEnv: envPtr, classCache: make(map[string]jclass)}
 }
 
 type JVM struct {
@@ -181,6 +189,7 @@ func (j *Env) NewObject(className string, args ...interface{}) (*ObjectRef, erro
 
 	return &ObjectRef{obj, className, false}, nil
 }
+
 
 func (j *Env) callFindClass(className string) (jclass, error) {
 	if v, ok := j.classCache[className]; ok {
@@ -937,13 +946,15 @@ func (o *ObjectRef) getClass(env *Env) (class jclass, err error) {
 			return 0, err
 		}
 		gotClass := string(b.([]byte))
+
 		// note uses . for class name separator
 		if gotClass != "java.lang.Object" {
 			gotClass = strings.Replace(gotClass, ".", "/", -1)
 			class, err = env.callFindClass(gotClass)
-			if err == nil {
-				o.className = gotClass
+			if err != nil {
+				return 0, err
 			}
+			o.className = gotClass
 			return class, err
 		}
 	}
