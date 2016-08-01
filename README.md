@@ -11,9 +11,9 @@ Without this Golang will not be able to print the exception information eg. type
 On Linux a solution is using LD_PRELOAD with a library that intercepts sigaction and adds the flag. (Code that does this: https://gist.github.com/timob/5d3032b54ed6ba2dc6de34b245c556c7)
 
 ## Status
-# Documentation needed.
-# Tests for main functions tests are present.
-# Has been used in Golang executable multi threaded applications on Linux / Windows.
+* Documentation needed.
+* Tests for main functions tests are present.
+* Has been used in Golang executable multi threaded applications on Linux / Windows.
 
 ## Changes
 * 2016-08-01 Initial version.
