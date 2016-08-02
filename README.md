@@ -13,7 +13,7 @@ On Linux a solution is using LD_PRELOAD with a library that intercepts sigaction
 ## Status
 * Documentation needed.
 * Tests for main functions tests are present.
-* Has been used in Golang executable multi threaded applications on Linux / Windows.
+* Has been used in Golang (using Go 1.6) executable multi threaded applications on Linux / Windows.
 
 ## Changes
 * 2016-08-01 Initial version.
