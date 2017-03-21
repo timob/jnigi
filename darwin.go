@@ -2,12 +2,12 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build linux
+// +build darwin
 
 package jnigi
 
 /*
-#cgo CFLAGS:-I../include/ -I/usr/lib/jvm/default-java/include
+#cgo CFLAGS:-I/Library/Java/Home/include -I/Library/Java/Home/include/darwin
 #cgo LDFLAGS:-ldl
 
 #include <dlfcn.h>
@@ -46,18 +46,18 @@ func jni_CreateJavaVM(pvm unsafe.Pointer, penv unsafe.Pointer, args unsafe.Point
 
 
 func init() {
-    cs := cString("/usr/lib/jvm/default-java/jre/lib/amd64/server/libjvm.so")
+    cs := cString("/Library/Java/Home/jre/lib/server/libjvm.dylib")
     defer free(cs)
     libHandle := uintptr(C.dlopen((*C.char)(cs), C.RTLD_NOW | C.RTLD_GLOBAL))
     if libHandle == 0 {
-        panic("could not dyanmically load libjvm.so")
+        panic("could not dyanmically load libjvm.dylib")
     }
 
     cs2 := cString("JNI_GetDefaultJavaVMInitArgs")
     defer free(cs2)
     ptr := C.dlsym(unsafe.Pointer(libHandle), (*C.char)(cs2))
     if ptr == nil {
-        panic("could not find JNI_GetDefaultJavaVMInitArgs in libjvm.so")
+        panic("could not find JNI_GetDefaultJavaVMInitArgs in libjvm.dylib")
     }
     C.var_JNI_GetDefaultJavaVMInitArgs = C.type_JNI_GetDefaultJavaVMInitArgs(ptr)
 
@@ -65,7 +65,7 @@ func init() {
     defer free(cs3)
     ptr = C.dlsym(unsafe.Pointer(libHandle), (*C.char)(cs3))
     if ptr == nil {
-        panic("could not find JNI_CreateJavaVM in libjvm.so")
+        panic("could not find JNI_CreateJavaVM in libjvm.dylib")
     }
     C.var_JNI_CreateJavaVM = C.type_JNI_CreateJavaVM(ptr)
 }
