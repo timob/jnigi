@@ -30,10 +30,10 @@ import (
 )
 
 func main() {
-	_, env, err := jnigi.CreateJVM(jnigi.NewJVMInitArgs(false, true, jnigi.DEFAULT_VERSION, []string{"-Xcheck:jni"}))
-	if err != nil {
-		log.Fatal(err)
-	}
+    _, env, err := jnigi.CreateJVM(jnigi.NewJVMInitArgs(false, true, jnigi.DEFAULT_VERSION, []string{"-Xcheck:jni"}))
+    if err != nil {
+        log.Fatal(err)
+    }
     obj, err := env.NewObject("java/lang/Object")
     if err != nil {
     	log.Fatal(err)
@@ -42,7 +42,7 @@ func main() {
     if err != nil {
     	log.Fatal(err)
     }
-	fmt.Printf("object hash code: %d\n", v.(int))
+    fmt.Printf("object hash code: %d\n", v.(int))
 }
 
 ````
