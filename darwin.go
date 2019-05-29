@@ -7,7 +7,6 @@
 package jnigi
 
 /*
-#cgo CFLAGS:-I/Library/Java/Home/include -I/Library/Java/Home/include/darwin
 #cgo LDFLAGS:-ldl
 
 #include <dlfcn.h>
@@ -56,11 +55,11 @@ func init() {
 	// On Darwin, this usually is set to something like:
 	// /Library/Java/JavaVirtualMachines/jdkVERSION.jdk/Contents/Home
 	// Where VERSION is the Java version (i.e. 1.8.0).
+	// Just use JAVA_HOME so we don't load the wrong JVM
 	if key, ok := os.LookupEnv("JAVA_HOME"); ok {
 		cs = cString(path.Join(key, "/jre/lib/server/libjvm.dylib"))
 	} else {
-		// In the event that JAVA_HOME is not set, we fall back to a hard-coded string.
-		cs = cString("/Library/Java/Home/jre/lib/server/libjvm.dylib")
+		panic("JAVA_HOME is not set, set it to the JDK path.")
 	}
 
 	libHandle := uintptr(C.dlopen((*C.char)(cs), C.RTLD_NOW|C.RTLD_GLOBAL))

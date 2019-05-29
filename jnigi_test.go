@@ -11,7 +11,18 @@ import (
 var env *Env
 var jvm *JVM
 
-func TestInit(t *testing.T) {
+
+// Run them all here so we can be sure they run on the same Goroutine
+func TestAll(t *testing.T) {
+	PTestInit(t)
+	PTestBasic(t)
+	PTestObjectArrays(t)
+	PTestInstanceOf(t)
+	PTestByteArray(t)
+	PTestAttach(t)
+}
+
+func PTestInit(t *testing.T) {
 	jvm2, e2, err := CreateJVM(NewJVMInitArgs(false, true, DEFAULT_VERSION, []string{"-Xcheck:jni"}))
 	if err != nil {
 		t.Fatal(err)
@@ -39,7 +50,7 @@ func fromGoStr(t *testing.T, str string) *ObjectRef {
 	return jstr
 }
 
-func TestBasic(t *testing.T) {
+func PTestBasic(t *testing.T) {
 	// new object, int method
 	obj, err := env.NewObject("java/lang/Object")
 	if err != nil {
@@ -132,7 +143,7 @@ func TestBasic(t *testing.T) {
 	
 }
 
-func TestAttach(t *testing.T) {
+func PTestAttach(t *testing.T) {
 	x := make(chan byte)
 
 	obj, err := env.NewObject("java/lang/Object")
@@ -157,7 +168,7 @@ func TestAttach(t *testing.T) {
 	<-x
 }
 
-func TestObjectArrays(t *testing.T) {
+func PTestObjectArrays(t *testing.T) {
 	str, err := env.NewObject("java/lang/String", []byte("splitXme"))
 	if err != nil {
 		t.Fatal(err)
@@ -199,7 +210,7 @@ func TestObjectArrays(t *testing.T) {
 	t.Logf("%s", v.([]byte))
 }
 
-func TestInstanceOf(t *testing.T) {
+func PTestInstanceOf(t *testing.T) {
 	alist, err := env.NewObject("java/util/ArrayList")
 	if err != nil {
 		t.Fatal(err)
@@ -227,7 +238,7 @@ func TestInstanceOf(t *testing.T) {
 	}
 }
 
-func TestByteArray(t *testing.T) {
+func PTestByteArray(t *testing.T) {
 	ba := env.NewByteArray(5)
 	bytes := ba.GetCritical(env)
 	copy(bytes, []byte("hello"))

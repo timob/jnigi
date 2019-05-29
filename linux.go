@@ -7,7 +7,6 @@
 package jnigi
 
 /*
-#cgo CFLAGS:-I../include/ -I/usr/lib/jvm/default-java/include
 #cgo LDFLAGS:-ldl
 
 #include <dlfcn.h>
@@ -33,39 +32,45 @@ jint dyn_JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
 import "C"
 
 import (
-    "unsafe"
+	"os"
+	"path"
+	"unsafe"
 )
 
 func jni_GetDefaultJavaVMInitArgs(args unsafe.Pointer) jint {
-    return jint(C.dyn_JNI_GetDefaultJavaVMInitArgs((unsafe.Pointer)(args)))
+	return jint(C.dyn_JNI_GetDefaultJavaVMInitArgs((unsafe.Pointer)(args)))
 }
 
 func jni_CreateJavaVM(pvm unsafe.Pointer, penv unsafe.Pointer, args unsafe.Pointer) jint {
-    return jint(C.dyn_JNI_CreateJavaVM((**C.JavaVM)(pvm), (*unsafe.Pointer)(penv), (unsafe.Pointer)(args)))
+	return jint(C.dyn_JNI_CreateJavaVM((**C.JavaVM)(pvm), (*unsafe.Pointer)(penv), (unsafe.Pointer)(args)))
 }
 
-
 func init() {
-    cs := cString("/usr/lib/jvm/default-java/jre/lib/amd64/server/libjvm.so")
-    defer free(cs)
-    libHandle := uintptr(C.dlopen((*C.char)(cs), C.RTLD_NOW | C.RTLD_GLOBAL))
-    if libHandle == 0 {
-        panic("could not dyanmically load libjvm.so")
-    }
+	jhPath := "/usr/lib/jvm/default-java"
+	if val, ok := os.LookupEnv("JAVA_HOME"); ok {
+		jhPath = val
+	}
 
-    cs2 := cString("JNI_GetDefaultJavaVMInitArgs")
-    defer free(cs2)
-    ptr := C.dlsym(unsafe.Pointer(libHandle), (*C.char)(cs2))
-    if ptr == nil {
-        panic("could not find JNI_GetDefaultJavaVMInitArgs in libjvm.so")
-    }
-    C.var_JNI_GetDefaultJavaVMInitArgs = C.type_JNI_GetDefaultJavaVMInitArgs(ptr)
+	cs := cString(path.Join(jhPath, "jre/lib/amd64/server/libjvm.so"))
+	defer free(cs)
+	libHandle := uintptr(C.dlopen((*C.char)(cs), C.RTLD_NOW|C.RTLD_GLOBAL))
+	if libHandle == 0 {
+		panic("could not dyanmically load libjvm.so")
+	}
 
-    cs3 := cString("JNI_CreateJavaVM")
-    defer free(cs3)
-    ptr = C.dlsym(unsafe.Pointer(libHandle), (*C.char)(cs3))
-    if ptr == nil {
-        panic("could not find JNI_CreateJavaVM in libjvm.so")
-    }
-    C.var_JNI_CreateJavaVM = C.type_JNI_CreateJavaVM(ptr)
+	cs2 := cString("JNI_GetDefaultJavaVMInitArgs")
+	defer free(cs2)
+	ptr := C.dlsym(unsafe.Pointer(libHandle), (*C.char)(cs2))
+	if ptr == nil {
+		panic("could not find JNI_GetDefaultJavaVMInitArgs in libjvm.so")
+	}
+	C.var_JNI_GetDefaultJavaVMInitArgs = C.type_JNI_GetDefaultJavaVMInitArgs(ptr)
+
+	cs3 := cString("JNI_CreateJavaVM")
+	defer free(cs3)
+	ptr = C.dlsym(unsafe.Pointer(libHandle), (*C.char)(cs3))
+	if ptr == nil {
+		panic("could not find JNI_CreateJavaVM in libjvm.so")
+	}
+	C.var_JNI_CreateJavaVM = C.type_JNI_CreateJavaVM(ptr)
 }
