@@ -5,7 +5,7 @@
 package jnigi
 
 /*
-#include<jni.h>
+#include <jni.h>
 */
 import "C"
 
