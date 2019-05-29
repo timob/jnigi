@@ -7,7 +7,68 @@
 package jnigi
 
 /*
-#cgo CFLAGS:-I../include/ -Ic:/oraclejdk/include -Ic:/oraclejdk/include/win32
-#cgo LDFLAGS:-ljvm -Lc:/oraclejdk/jre/bin/server
+#include <jni.h>
+#include <Windows.h>
+
+typedef jint (*type_JNI_GetDefaultJavaVMInitArgs)(void*);
+
+type_JNI_GetDefaultJavaVMInitArgs var_JNI_GetDefaultJavaVMInitArgs;
+
+jint dyn_JNI_GetDefaultJavaVMInitArgs(void *args) {
+    return var_JNI_GetDefaultJavaVMInitArgs(args);
+}
+
+typedef jint (*type_JNI_CreateJavaVM)(JavaVM**, void**, void*);
+
+type_JNI_CreateJavaVM var_JNI_CreateJavaVM;
+
+jint dyn_JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
+    return var_JNI_CreateJavaVM(pvm, penv, args);
+}
+
 */
 import "C"
+
+import (
+	"os"
+	"path"
+	"unsafe"
+)
+
+func jni_GetDefaultJavaVMInitArgs(args unsafe.Pointer) jint {
+	return jint(C.dyn_JNI_GetDefaultJavaVMInitArgs((unsafe.Pointer)(args)))
+}
+
+func jni_CreateJavaVM(pvm unsafe.Pointer, penv unsafe.Pointer, args unsafe.Pointer) jint {
+	return jint(C.dyn_JNI_CreateJavaVM((**C.JavaVM)(pvm), (*unsafe.Pointer)(penv), (unsafe.Pointer)(args)))
+}
+
+func init() {
+	jhPath := "c:/java"
+	if val, ok := os.LookupEnv("JAVA_HOME"); ok {
+		jhPath = val
+	}
+
+	cs := cString(path.Join(jhPath, "jre/bin/server/jvm.dll"))
+	defer free(cs)
+	libHandle := C.LoadLibrary((*C.char)(cs))
+	if libHandle == nil {
+		panic("could not dyanmically load jvm.dll")
+	}
+
+	cs2 := cString("JNI_GetDefaultJavaVMInitArgs")
+	defer free(cs2)
+	ptr := C.GetProcAddress(libHandle, (*C.char)(cs2))
+	if ptr == nil {
+		panic("could not find JNI_GetDefaultJavaVMInitArgs in jvm.dll")
+	}
+	C.var_JNI_GetDefaultJavaVMInitArgs = C.type_JNI_GetDefaultJavaVMInitArgs(ptr)
+
+	cs3 := cString("JNI_CreateJavaVM")
+	defer free(cs3)
+	ptr = C.GetProcAddress(libHandle, (*C.char)(cs3))
+	if ptr == nil {
+		panic("could not find JNI_CreateJavaVM in jvm.dll")
+	}
+	C.var_JNI_CreateJavaVM = C.type_JNI_CreateJavaVM(ptr)
+}
