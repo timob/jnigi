@@ -14,6 +14,9 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
 	osdir=darwin
 elif [[ "$OSTYPE" == "msys" ]]; then
 	osdir=win32
+else
+	echo "ERROR: unkown OSTYPE: $OSTYPE"
+	exit 1
 fi
 
 

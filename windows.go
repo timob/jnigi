@@ -44,9 +44,11 @@ func jni_CreateJavaVM(pvm unsafe.Pointer, penv unsafe.Pointer, args unsafe.Point
 }
 
 func init() {
-	jhPath := "c:/java"
+	var jhPath string
 	if val, ok := os.LookupEnv("JAVA_HOME"); ok {
 		jhPath = val
+	} else {
+		panic("JNIGI ERROR: JAVA_HOME is not set, set it to the JDK path.")
 	}
 
 	cs := cString(path.Join(jhPath, "jre/bin/server/jvm.dll"))

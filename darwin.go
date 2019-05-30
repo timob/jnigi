@@ -59,7 +59,7 @@ func init() {
 	if key, ok := os.LookupEnv("JAVA_HOME"); ok {
 		cs = cString(path.Join(key, "/jre/lib/server/libjvm.dylib"))
 	} else {
-		panic("JAVA_HOME is not set, set it to the JDK path.")
+		panic("JNIGI ERROR: JAVA_HOME is not set, set it to the JDK path.")
 	}
 
 	libHandle := uintptr(C.dlopen((*C.char)(cs), C.RTLD_NOW|C.RTLD_GLOBAL))
