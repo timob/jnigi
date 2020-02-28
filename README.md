@@ -12,7 +12,7 @@ this.
 source <gopath>/src/github.com/timob/jnigi/compilevars.sh <root path of jdk>
 ```
 
-On Windows you can use `install.bat` in the same way.
+On Windows you can use `compilevars.bat` in the same way (but you don't need `source` at the begining).
 
 
 ## Finding JVM at Runtime
