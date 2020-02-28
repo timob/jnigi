@@ -16,7 +16,8 @@ This script sets the CGO_CFLAGS to add the C header includes. You can do this yo
 is needed for `go test`.
 
 ## Finding JVM at Runtime
-Set `JAVA_HOME` environment variable to the JDK path location, from here JNIGI will look for the JVM library installed in the JRE.
+Use the `LoadJVMLib(jvmLibPath string) error` function to load the shared library at run time.
+There is a function `AttemptToFindJVMLibPath() string` to help to find the library path.
 
 ## Notes
 ### Signals
