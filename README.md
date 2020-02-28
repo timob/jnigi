@@ -6,7 +6,7 @@ This allows for Golang to initiate the JVM or Java to start a Golang runtime res
 
 ## Compile
 The `CGO_CFLAGS` needs to be set to add the JNI C header files. The `compilevars.sh` script will do
-this. 
+this.
 ```
 # put this in your build script
 source <gopath>/src/github.com/timob/jnigi/compilevars.sh <root path of jdk>
