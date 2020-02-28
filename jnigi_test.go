@@ -6,6 +6,8 @@ package jnigi
 
 import (
 	"testing"
+	"os"
+	"runtime"
 )
 
 var env *Env
@@ -23,6 +25,13 @@ func TestAll(t *testing.T) {
 }
 
 func PTestInit(t *testing.T) {
+	libPath := "/usr/lib/jvm/default-java/jre/lib/" + runtime.GOARCH + "/server/libjvm.so"
+	if val, ok := os.LookupEnv("JAVA_HOME"); ok {
+		libPath = val + "/jre/lib/" + runtime.GOARCH + "/server/libjvm.so"
+	}
+	if err := LoadJVMLib(libPath); err != nil {
+		t.Fatal(err)
+	}
 	jvm2, e2, err := CreateJVM(NewJVMInitArgs(false, true, DEFAULT_VERSION, []string{"-Xcheck:jni"}))
 	if err != nil {
 		t.Fatal(err)

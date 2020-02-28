@@ -32,9 +32,8 @@ jint dyn_JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
 import "C"
 
 import (
-	"os"
-	"path"
 	"unsafe"
+	"errors"
 )
 
 func jni_GetDefaultJavaVMInitArgs(args unsafe.Pointer) jint {
@@ -45,24 +44,19 @@ func jni_CreateJavaVM(pvm unsafe.Pointer, penv unsafe.Pointer, args unsafe.Point
 	return jint(C.dyn_JNI_CreateJavaVM((**C.JavaVM)(pvm), (*unsafe.Pointer)(penv), (unsafe.Pointer)(args)))
 }
 
-func init() {
-	jhPath := "/usr/lib/jvm/default-java"
-	if val, ok := os.LookupEnv("JAVA_HOME"); ok {
-		jhPath = val
-	}
-
-	cs := cString(path.Join(jhPath, "jre/lib/amd64/server/libjvm.so"))
+func LoadJVMLib(jvmLibPath string) error {
+	cs := cString(jvmLibPath)
 	defer free(cs)
 	libHandle := uintptr(C.dlopen((*C.char)(cs), C.RTLD_NOW|C.RTLD_GLOBAL))
 	if libHandle == 0 {
-		panic("could not dyanmically load libjvm.so")
+		return errors.New("could not dyanmically load libjvm.so")
 	}
 
 	cs2 := cString("JNI_GetDefaultJavaVMInitArgs")
 	defer free(cs2)
 	ptr := C.dlsym(unsafe.Pointer(libHandle), (*C.char)(cs2))
 	if ptr == nil {
-		panic("could not find JNI_GetDefaultJavaVMInitArgs in libjvm.so")
+		return errors.New("could not find JNI_GetDefaultJavaVMInitArgs in libjvm.so")
 	}
 	C.var_JNI_GetDefaultJavaVMInitArgs = C.type_JNI_GetDefaultJavaVMInitArgs(ptr)
 
@@ -70,7 +64,8 @@ func init() {
 	defer free(cs3)
 	ptr = C.dlsym(unsafe.Pointer(libHandle), (*C.char)(cs3))
 	if ptr == nil {
-		panic("could not find JNI_CreateJavaVM in libjvm.so")
+		return errors.New("could not find JNI_CreateJavaVM in libjvm.so")
 	}
 	C.var_JNI_CreateJavaVM = C.type_JNI_CreateJavaVM(ptr)
+	return nil
 }
