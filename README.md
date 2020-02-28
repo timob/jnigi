@@ -46,6 +46,9 @@ import (
 )
 
 func main() {
+    if err := jnigi.LoadJVMLib(jnigi.AttemptToFindJVMLibPath()); err != nil {
+        log.Fatal(err)
+    }
     _, env, err := jnigi.CreateJVM(jnigi.NewJVMInitArgs(false, true, jnigi.DEFAULT_VERSION, []string{"-Xcheck:jni"}))
     if err != nil {
         log.Fatal(err)
