@@ -4,16 +4,16 @@ Java Native Interface Golang Interface.
 A package to access Java from Golang code. Can be used from a Golang executable or shared library.
 This allows for Golang to initiate the JVM or Java to start a Golang runtime respectively.
 
-## Install
-Run the install script with the JDK path location.
+## Compile
+The `CGO_CFLAGS` needs to be set to add the JNI C header files. The `compilevars.sh` script will do
+this.
 ```
-./install.sh <root path of jdk>
+# put this in your build script
+source <gopath>/src/github.com/timob/jnigi/compilevars.sh <root path of jdk>
 ```
 
-On Windows you can use `install.bat`.
+On Windows you can use `compilevars.bat` in the same way (but you don't need `source` at the begining).
 
-This script sets the CGO_CFLAGS to add the C header includes. You can do this your self and run `go install`, and setting these
-is needed for `go test`.
 
 ## Finding JVM at Runtime
 Use the `LoadJVMLib(jvmLibPath string) error` function to load the shared library at run time.
