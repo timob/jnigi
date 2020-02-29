@@ -33,6 +33,7 @@ import (
 	"os"
 	"path"
 	"unsafe"
+	"errors"
 )
 
 func jni_GetDefaultJavaVMInitArgs(args unsafe.Pointer) jint {
@@ -43,24 +44,19 @@ func jni_CreateJavaVM(pvm unsafe.Pointer, penv unsafe.Pointer, args unsafe.Point
 	return jint(C.dyn_JNI_CreateJavaVM((**C.JavaVM)(pvm), (*unsafe.Pointer)(penv), (unsafe.Pointer)(args)))
 }
 
-func init() {
-	jhPath := "c:/java"
-	if val, ok := os.LookupEnv("JAVA_HOME"); ok {
-		jhPath = val
-	}
-
-	cs := cString(path.Join(jhPath, "jre/bin/server/jvm.dll"))
+func LoadJVMLib(jvmLibPath string) error {
+	cs := cString(jvmLibPath)
 	defer free(cs)
 	libHandle := C.LoadLibrary((*C.char)(cs))
 	if libHandle == nil {
-		panic("could not dyanmically load jvm.dll")
+		return errors.New("could not dyanmically load jvm.dll")
 	}
 
 	cs2 := cString("JNI_GetDefaultJavaVMInitArgs")
 	defer free(cs2)
 	ptr := C.GetProcAddress(libHandle, (*C.char)(cs2))
 	if ptr == nil {
-		panic("could not find JNI_GetDefaultJavaVMInitArgs in jvm.dll")
+		return errors.New("could not find JNI_GetDefaultJavaVMInitArgs in jvm.dll")
 	}
 	C.var_JNI_GetDefaultJavaVMInitArgs = C.type_JNI_GetDefaultJavaVMInitArgs(ptr)
 
@@ -68,7 +64,8 @@ func init() {
 	defer free(cs3)
 	ptr = C.GetProcAddress(libHandle, (*C.char)(cs3))
 	if ptr == nil {
-		panic("could not find JNI_CreateJavaVM in jvm.dll")
+		return errors.New("could not find JNI_CreateJavaVM in jvm.dll")
 	}
 	C.var_JNI_CreateJavaVM = C.type_JNI_CreateJavaVM(ptr)
+	return nil
 }

@@ -23,6 +23,11 @@ func TestAll(t *testing.T) {
 }
 
 func PTestInit(t *testing.T) {
+	libPath := AttemptToFindJVMLibPath()
+	if err := LoadJVMLib(libPath); err != nil {
+		t.Log("can use JAVA_HOME environment variable to set JRE root directory")
+		t.Fatal(err)
+	}
 	jvm2, e2, err := CreateJVM(NewJVMInitArgs(false, true, DEFAULT_VERSION, []string{"-Xcheck:jni"}))
 	if err != nil {
 		t.Fatal(err)

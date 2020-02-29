@@ -35,6 +35,7 @@ import (
 	"unsafe"
 	"os"
 	"path"
+	"errors"
 )
 
 func jni_GetDefaultJavaVMInitArgs(args unsafe.Pointer) jint {
@@ -45,33 +46,20 @@ func jni_CreateJavaVM(pvm unsafe.Pointer, penv unsafe.Pointer, args unsafe.Point
 	return jint(C.dyn_JNI_CreateJavaVM((**C.JavaVM)(pvm), (*unsafe.Pointer)(penv), (unsafe.Pointer)(args)))
 }
 
-func init() {
-	var (
-		cs unsafe.Pointer
-	)
+func LoadJVMLib(jvmLibPath string) error {
+	cs := cString(jvmLibPath)
 	defer free(cs)
-
-	// First, check if JAVA_HOME is set as an environment variable.
-	// On Darwin, this usually is set to something like:
-	// /Library/Java/JavaVirtualMachines/jdkVERSION.jdk/Contents/Home
-	// Where VERSION is the Java version (i.e. 1.8.0).
-	// Just use JAVA_HOME so we don't load the wrong JVM
-	if key, ok := os.LookupEnv("JAVA_HOME"); ok {
-		cs = cString(path.Join(key, "/jre/lib/server/libjvm.dylib"))
-	} else {
-		panic("JAVA_HOME is not set, set it to the JDK path.")
-	}
 
 	libHandle := uintptr(C.dlopen((*C.char)(cs), C.RTLD_NOW|C.RTLD_GLOBAL))
 	if libHandle == 0 {
-		panic("could not dyanmically load libjvm.dylib")
+		return errors.New("could not dyanmically load libjvm.dylib")
 	}
 
 	cs2 := cString("JNI_GetDefaultJavaVMInitArgs")
 	defer free(cs2)
 	ptr := C.dlsym(unsafe.Pointer(libHandle), (*C.char)(cs2))
 	if ptr == nil {
-		panic("could not find JNI_GetDefaultJavaVMInitArgs in libjvm.dylib")
+		return errors.New("could not find JNI_GetDefaultJavaVMInitArgs in libjvm.dylib")
 	}
 	C.var_JNI_GetDefaultJavaVMInitArgs = C.type_JNI_GetDefaultJavaVMInitArgs(ptr)
 
@@ -79,7 +67,8 @@ func init() {
 	defer free(cs3)
 	ptr = C.dlsym(unsafe.Pointer(libHandle), (*C.char)(cs3))
 	if ptr == nil {
-		panic("could not find JNI_CreateJavaVM in libjvm.dylib")
+		return errors.New("could not find JNI_CreateJavaVM in libjvm.dylib")
 	}
 	C.var_JNI_CreateJavaVM = C.type_JNI_CreateJavaVM(ptr)
+	return nil
 }
