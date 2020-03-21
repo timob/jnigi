@@ -33,8 +33,6 @@ import "C"
 
 import (
 	"unsafe"
-	"os"
-	"path"
 	"errors"
 )
 
