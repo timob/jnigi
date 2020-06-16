@@ -127,7 +127,7 @@ func (j *JVM) DetachCurrentThread() error {
 
 func (j *Env) GetJavaVM() (*JVM, error) {
 	runtime.LockOSThread()
-	p := malloc(unsafe.Sizeof((unsafe.Pointer)(nil)))	
+	p := malloc(unsafe.Sizeof((unsafe.Pointer)(nil)))
 
 	if getJavaVM(j.jniEnv, p) < 0 {
 		return nil, errors.New("Couldn't get JVM")

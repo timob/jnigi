@@ -575,7 +575,7 @@ jint DetachCurrentThread(JavaVM* vm) {
 }
 
 jint GetJavaVM(JNIEnv* env, JavaVM** vm) {
-	return (*env)->GetJavaVM (env, vm);	
+	return (*env)->GetJavaVM (env, vm);
 }
 */
 import "C"

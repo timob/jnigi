@@ -20,6 +20,7 @@ func TestAll(t *testing.T) {
 	PTestInstanceOf(t)
 	PTestByteArray(t)
 	PTestAttach(t)
+	PTestGetJavaVM(t)
 }
 
 func PTestInit(t *testing.T) {
@@ -279,4 +280,12 @@ func PTestByteArray(t *testing.T) {
 		t.Logf("ByteArray test failed")
 	}
 	ba2.ReleaseCritical(env, bytes)
+}
+
+func PTestGetJavaVM(t *testing.T) {
+    _, err := env.GetJavaVM()
+    if err != nil {
+        t.Fatalf("GetJavaVM failed %s", err)
+    }
+	t.Logf("Call GetJavaJVM: passed")
 }
