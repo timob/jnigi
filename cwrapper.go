@@ -573,6 +573,10 @@ jint AttachCurrentThread(JavaVM* vm, void** penv, void* args) {
 jint DetachCurrentThread(JavaVM* vm) {
 	return (*vm)->DetachCurrentThread (vm);
 }
+
+jint GetJavaVM(JNIEnv* env, JavaVM** vm) {
+	return (*env)->GetJavaVM (env, vm);
+}
 */
 import "C"
 
@@ -1178,3 +1182,6 @@ func detachCurrentThread(vm unsafe.Pointer) jint {
 	return jint(C.DetachCurrentThread((*C.JavaVM)(vm)))
 }
 
+func getJavaVM(env unsafe.Pointer, vm unsafe.Pointer) jint {
+	return jint(C.GetJavaVM((*C.JNIEnv)(env), (**C.JavaVM)(vm)))
+}
