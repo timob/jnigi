@@ -5,7 +5,7 @@ if [[ "$jdk_path" == "" ]]; then
 	echo "usage: source ./compilevars.sh <jdk path>"
 else
 
-  if [[ "$OSTYPE" == "linux-gnu" ]]; then
+  if [[ "$OSTYPE" == "linux-gnu"* ]]; then
 	  osdir=linux
   elif [[ "$OSTYPE" == "darwin"* ]]; then
   	  osdir=darwin
