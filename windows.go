@@ -30,8 +30,6 @@ jint dyn_JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
 import "C"
 
 import (
-	"os"
-	"path"
 	"unsafe"
 	"errors"
 )
