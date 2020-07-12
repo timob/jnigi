@@ -47,7 +47,7 @@ func LoadJVMLib(jvmLibPath string) error {
 	defer free(cs)
 	libHandle := C.LoadLibrary((*C.char)(cs))
 	if libHandle == nil {
-		return errors.New("could not dyanmically load jvm.dll")
+		return errors.New("could not dynamically load jvm.dll")
 	}
 
 	cs2 := cString("JNI_GetDefaultJavaVMInitArgs")

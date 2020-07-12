@@ -49,7 +49,7 @@ func LoadJVMLib(jvmLibPath string) error {
 	defer free(cs)
 	libHandle := uintptr(C.dlopen((*C.char)(cs), C.RTLD_NOW|C.RTLD_GLOBAL))
 	if libHandle == 0 {
-		return errors.New("could not dyanmically load libjvm.so")
+		return errors.New("could not dynamically load libjvm.so")
 	}
 
 	cs2 := cString("JNI_GetDefaultJavaVMInitArgs")
