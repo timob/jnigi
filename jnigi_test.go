@@ -26,6 +26,7 @@ func TestAll(t *testing.T) {
 func PTestInit(t *testing.T) {
 	libPath := AttemptToFindJVMLibPath()
 	if err := LoadJVMLib(libPath); err != nil {
+		t.Logf("library path = %s", libPath)
 		t.Log("can use JAVA_HOME environment variable to set JRE root directory")
 		t.Fatal(err)
 	}
