@@ -574,6 +574,10 @@ jint DetachCurrentThread(JavaVM* vm) {
 	return (*vm)->DetachCurrentThread (vm);
 }
 
+jint DestroyJavaVM(JavaVM* vm) {
+ 	return (*vm)->DestroyJavaVM (vm);
+}
+
 jint GetJavaVM(JNIEnv* env, JavaVM** vm) {
 	return (*env)->GetJavaVM (env, vm);
 }
@@ -586,6 +590,8 @@ const (
 	JNI_VERSION_1_2 = C.JNI_VERSION_1_2
 	JNI_VERSION_1_4 = C.JNI_VERSION_1_4
 	JNI_VERSION_1_6 = C.JNI_VERSION_1_6
+	JNI_VERSION_1_8 = C.JNI_VERSION_1_8
+
 	DEFAULT_VERSION = JNI_VERSION_1_6
 )
 
@@ -1182,6 +1188,10 @@ func detachCurrentThread(vm unsafe.Pointer) jint {
 	return jint(C.DetachCurrentThread((*C.JavaVM)(vm)))
 }
 
+func destroyJavaVM(vm unsafe.Pointer) jint {
+	return jint(C.DestroyJavaVM((*C.JavaVM)(vm)))
+}
+
 func getJavaVM(env unsafe.Pointer, vm unsafe.Pointer) jint {
 	return jint(C.GetJavaVM((*C.JNIEnv)(env), (**C.JavaVM)(vm)))
-}
+} 
