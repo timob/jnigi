@@ -20,7 +20,8 @@ func TestAll(t *testing.T) {
 	PTestInstanceOf(t)
 	PTestByteArray(t)
 	PTestAttach(t)
-	PTestGetJavaVM(t)
+	PTestGetJVM(t)
+	PTestDestroy(t)
 }
 
 func PTestInit(t *testing.T) {
@@ -168,6 +169,9 @@ func PTestAttach(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Logf("%d", v.(int))
+		if err := jvm.DetachCurrentThread(); err != nil {
+			t.Fatal(err)
+		}
 
 		x <- 4
 	}()
@@ -283,10 +287,18 @@ func PTestByteArray(t *testing.T) {
 	ba2.ReleaseCritical(env, bytes)
 }
 
-func PTestGetJavaVM(t *testing.T) {
-    _, err := env.GetJavaVM()
+func PTestGetJVM(t *testing.T) {
+    _, err := env.GetJVM()
     if err != nil {
         t.Fatalf("GetJavaVM failed %s", err)
     }
 	t.Logf("Call GetJavaJVM: passed")
+}
+
+func PTestDestroy(t *testing.T) {
+	err := jvm.Destroy()
+    if err != nil {
+        t.Fatalf("DestroyJVM failed %s", err)
+    }
+	t.Logf("Call DestroyJVM: passed")
 }
