@@ -31,6 +31,7 @@ On Linux a solution is using LD_PRELOAD with a library that intercepts sigaction
 * Documentation needed.
 
 ## Changes
+* 2020-11-08 Add DestroyJavaVM support, JNI_VERSION_1_8 const
 * 2019-05-29 Better multiplatform support, dynamic loading of JVM library.
 * 2016-08-01 Initial version.
 
@@ -40,28 +41,31 @@ On Linux a solution is using LD_PRELOAD with a library that intercepts sigaction
 package main
 
 import (
-	"fmt"
-	"github.com/timob/jnigi"
-	"log"
+    "fmt"
+    "github.com/timob/jnigi"
+    "log"
 )
 
 func main() {
     if err := jnigi.LoadJVMLib(jnigi.AttemptToFindJVMLibPath()); err != nil {
         log.Fatal(err)
     }
-    _, env, err := jnigi.CreateJVM(jnigi.NewJVMInitArgs(false, true, jnigi.DEFAULT_VERSION, []string{"-Xcheck:jni"}))
+    jvm, env, err := jnigi.CreateJVM(jnigi.NewJVMInitArgs(false, true, jnigi.DEFAULT_VERSION, []string{"-Xcheck:jni"}))
     if err != nil {
         log.Fatal(err)
     }
     obj, err := env.NewObject("java/lang/Object")
     if err != nil {
-    	log.Fatal(err)
+        log.Fatal(err)
     }
     v, err := obj.CallMethod(env, "hashCode", jnigi.Int)
     if err != nil {
-    	log.Fatal(err)
+        log.Fatal(err)
     }
     fmt.Printf("object hash code: %d\n", v.(int))
+    if err := jvm.Destroy(); err != nil {
+        log.Fatal(err)
+    }
 }
 
 ````

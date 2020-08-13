@@ -125,7 +125,14 @@ func (j *JVM) DetachCurrentThread() error {
 	return nil
 }
 
-func (j *Env) GetJavaVM() (*JVM, error) {
+func (j *JVM) Destroy() error {
+ 	if destroyJavaVM(j.javaVM) < 0 {
+ 		return errors.New("JNIGI: destroyJavaVM error")
+ 	}
+ 	return nil
+}
+
+func (j *Env) GetJVM() (*JVM, error) {
 	runtime.LockOSThread()
 	p := malloc(unsafe.Sizeof((unsafe.Pointer)(nil)))
 
