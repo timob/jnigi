@@ -32,8 +32,9 @@ jint dyn_JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
 import "C"
 
 import (
-	"unsafe"
 	"errors"
+	"sync"
+	"unsafe"
 )
 
 func jni_GetDefaultJavaVMInitArgs(args unsafe.Pointer) jint {
@@ -68,4 +69,14 @@ func LoadJVMLib(jvmLibPath string) error {
 	}
 	C.var_JNI_CreateJavaVM = C.type_JNI_CreateJavaVM(ptr)
 	return nil
+}
+
+func RequireJVMGUILoop() bool {
+	return false
+}
+
+func RunJVMGUILoop() {
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	wg.Wait()
 }

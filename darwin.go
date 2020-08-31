@@ -7,10 +7,11 @@
 package jnigi
 
 /*
-#cgo LDFLAGS:-ldl
+#cgo LDFLAGS:-ldl -framework CoreFoundation
 
 #include <dlfcn.h>
 #include <jni.h>
+#include <CoreFoundation/CoreFoundation.h>
 
 typedef jint (*type_JNI_GetDefaultJavaVMInitArgs)(void*);
 
@@ -28,12 +29,45 @@ jint dyn_JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
     return var_JNI_CreateJavaVM(pvm, penv, args);
 }
 
+// call back for dummy source used to make sure the CFRunLoop doesn't exit right away
+// This callback is called when the source has fired.
+void jnigiCFRSourceCallBack (  void *info  ) {
+}
+
+void jnigiRunCFRLoop(void) {
+    CFRunLoopSourceContext sourceContext;
+
+    //Create a a sourceContext to be used by our source that makes
+	//sure the CFRunLoop doesn't exit right away
+	sourceContext.version = 0;
+	sourceContext.info = NULL;
+	sourceContext.retain = NULL;
+	sourceContext.release = NULL;
+	sourceContext.copyDescription = NULL;
+	sourceContext.equal = NULL;
+	sourceContext.hash = NULL;
+	sourceContext.schedule = NULL;
+	sourceContext.cancel = NULL;
+	sourceContext.perform = &jnigiCFRSourceCallBack;
+
+    // Create the Source from the sourceContext
+	CFRunLoopSourceRef sourceRef = CFRunLoopSourceCreate (NULL, 0, &sourceContext);
+
+	// Use the constant kCFRunLoopCommonModes to add the source to the set of objects
+	// monitored by all the common modes
+	CFRunLoopAddSource (CFRunLoopGetCurrent(),sourceRef,kCFRunLoopCommonModes);
+
+	// Park this thread in the runloop
+	CFRunLoopRun();
+}
+
 */
 import "C"
 
 import (
-	"unsafe"
 	"errors"
+	"path/filepath"
+	"unsafe"
 )
 
 func jni_GetDefaultJavaVMInitArgs(args unsafe.Pointer) jint {
@@ -45,8 +79,31 @@ func jni_CreateJavaVM(pvm unsafe.Pointer, penv unsafe.Pointer, args unsafe.Point
 }
 
 func LoadJVMLib(jvmLibPath string) error {
+	// On MacOS we need to preload libjli.dylib to workaround JDK-7131356 "No Java runtime present, requesting install"
+	libjliPath, err := filepath.Abs(filepath.Join(filepath.Dir(jvmLibPath), "..", "jli", "libjli.dylib"))
+	if err != nil {
+		return errors.New("error resolving absolute path to 'libjli.dylib'." + err.Error())
+	}
+
+	clibjliPath := cString(libjliPath)
+	defer func() {
+		if clibjliPath != nil {
+			free(clibjliPath)
+		}
+	}()
+
+	// Do not close JLI library handle until JVM closes
+	handlelibjli := C.dlopen((*C.char)(clibjliPath), C.RTLD_NOW|C.RTLD_GLOBAL)
+	if handlelibjli == nil {
+		return errors.New("could not dynamically load 'libjli.dylib'")
+	}
+
 	cs := cString(jvmLibPath)
-	defer free(cs)
+	defer func() {
+		if cs != nil {
+			free(cs)
+		}
+	}()
 
 	libHandle := uintptr(C.dlopen((*C.char)(cs), C.RTLD_NOW|C.RTLD_GLOBAL))
 	if libHandle == 0 {
@@ -69,4 +126,12 @@ func LoadJVMLib(jvmLibPath string) error {
 	}
 	C.var_JNI_CreateJavaVM = C.type_JNI_CreateJavaVM(ptr)
 	return nil
+}
+
+func RequireJVMGUILoop() bool {
+	return true
+}
+
+func RunJVMGUILoop() {
+	C.jnigiRunCFRLoop()
 }
