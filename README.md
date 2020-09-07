@@ -4,6 +4,9 @@ Java Native Interface Golang Interface.
 A package to access Java from Golang code. Can be used from a Golang executable or shared library.
 This allows for Golang to initiate the JVM or Java to start a Golang runtime respectively.
 
+## Slack
+For discussing JNIGI development and using Java with Go in general https://gophers.slack.com/messages/gojava
+
 ## Compile
 The `CGO_CFLAGS` needs to be set to add the JNI C header files. The `compilevars.sh` script will do
 this.
