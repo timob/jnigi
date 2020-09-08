@@ -1490,6 +1490,37 @@ func (j *Env) DeleteLocalRef(o *ObjectRef) {
 	o.jobject = 0
 }
 
+func (j *Env) EnsureLocalCapacity(capacity int32) error {
+	success := ensureLocalCapacity(j.jniEnv, jint(capacity)) == 0
+	if j.exceptionCheck() {
+		return j.handleException()
+	}
+	if !success {
+		return errors.New("JNIGI: ensureLocalCapacity error")
+	}
+	return nil
+}
+
+func (j *Env) PushLocalFrame(capacity int32) error {
+	success := pushLocalFrame(j.jniEnv, jint(capacity)) == 0
+	if j.exceptionCheck() {
+		return j.handleException()
+	}
+	if !success {
+		return errors.New("JNIGI: pushLocalFrame error")
+	}
+	return nil
+}
+
+func (j *Env) PopLocalFrame(result *ObjectRef) *ObjectRef {
+	if result == nil {
+		result = &ObjectRef{}
+	}
+	o := popLocalFrame(j.jniEnv, result.jobject)
+	result.jobject = 0
+	return &ObjectRef{o, result.className, result.isArray}
+}
+
 var utf8 *ObjectRef
 
 // return global reference to java/lang/String containing "UTF-8"

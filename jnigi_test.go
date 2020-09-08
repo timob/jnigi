@@ -21,6 +21,8 @@ func TestAll(t *testing.T) {
 	PTestByteArray(t)
 	PTestAttach(t)
 	PTestGetJVM(t)
+	PTestEnsureLocalCapacity(t)
+	PTestPushPopLocalFrame(t)
 	PTestDestroy(t)
 }
 
@@ -288,17 +290,71 @@ func PTestByteArray(t *testing.T) {
 }
 
 func PTestGetJVM(t *testing.T) {
-    _, err := env.GetJVM()
-    if err != nil {
-        t.Fatalf("GetJavaVM failed %s", err)
-    }
+	_, err := env.GetJVM()
+	if err != nil {
+		t.Fatalf("GetJavaVM failed %s", err)
+	}
 	t.Logf("Call GetJavaJVM: passed")
 }
 
 func PTestDestroy(t *testing.T) {
 	err := jvm.Destroy()
-    if err != nil {
-        t.Fatalf("DestroyJVM failed %s", err)
-    }
+	if err != nil {
+		t.Fatalf("DestroyJVM failed %s", err)
+	}
 	t.Logf("Call DestroyJVM: passed")
+}
+
+func PTestEnsureLocalCapacity(t *testing.T) {
+	if err := env.EnsureLocalCapacity(256); err != nil {
+		t.Fatalf("EnsureLocalCapacity failed %s", err)
+	}
+	t.Logf("Call EnsureLocalCapacity: passed")
+}
+
+func PTestPushPopLocalFrame(t *testing.T) {
+	if err := env.PushLocalFrame(64); err != nil {
+		t.Fatalf("PushLocalFrame failed %s", err)
+	}
+	t.Logf("Call PushLocalFrame: passed")
+
+	obj, err := env.NewObject("java/lang/Object")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := obj.CallMethod(env, "hashCode", Int); err != nil {
+		t.Fatal(err)
+	}
+
+	// Pop local frame with obj reference; obj should now be in previous frame
+	obj = env.PopLocalFrame(obj)
+	t.Logf("Call PopLocalFrame: passed")
+
+	if _, err := obj.CallMethod(env, "hashCode", Int); err != nil {
+		t.Fatalf("hashCode after PopLocalFrame failed %s", err)
+	}
+
+	env.DeleteLocalRef(obj)
+
+	// Now do again with nil argument to pop
+	if err := env.PushLocalFrame(32); err != nil {
+		t.Fatalf("PushLocalFrame failed %s", err)
+	}
+	t.Logf("Call PushLocalFrame: passed")
+
+	obj, err = env.NewObject("java/lang/Object")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := obj.CallMethod(env, "hashCode", Int); err != nil {
+		t.Fatal(err)
+	}
+
+	// Pop local frame with nil
+	obj = env.PopLocalFrame(nil)
+	t.Logf("Call PopLocalFrame: passed")
+
+	if !obj.IsNil() {
+		t.Fatal("PopLocalFrame return value is not nil")
+	}
 }
