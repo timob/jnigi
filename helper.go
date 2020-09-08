@@ -8,6 +8,8 @@ import (
 
 // AttemptToFindJVMLibPath tries to find the full path to the JVM shared library file
 func AttemptToFindJVMLibPath() string {
+	// for these linux is the "default"
+
 	prefix := os.Getenv("JAVA_HOME")
 	if prefix == "" {
 		if runtime.GOOS == "windows" {
@@ -19,11 +21,13 @@ func AttemptToFindJVMLibPath() string {
 		}
 	}
 
-	dirPath := filepath.Join(prefix, "jre")
+	dirPath := prefix
 	if runtime.GOOS == "windows" {
 		dirPath = filepath.Join(dirPath, "bin", "server")
+	} else if runtime.GOOS == "darwin" {
+		dirPath = filepath.Join(dirPath, "lib", "server")
 	} else {
-		dirPath = filepath.Join(dirPath, "lib", runtime.GOARCH, "server")
+		dirPath = filepath.Join(dirPath, "jre", "lib", runtime.GOARCH, "server")
 	}
 
 	var libPath string
