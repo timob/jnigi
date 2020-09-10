@@ -34,6 +34,7 @@ import "C"
 import (
 	"unsafe"
 	"errors"
+	"log"
 )
 
 func jni_GetDefaultJavaVMInitArgs(args unsafe.Pointer) jint {
@@ -46,11 +47,7 @@ func jni_CreateJavaVM(pvm unsafe.Pointer, penv unsafe.Pointer, args unsafe.Point
 
 func LoadJVMLib(jvmLibPath string) error {
 	// On MacOS we need to preload libjli.dylib to workaround JDK-7131356 "No Java runtime present, requesting install"
-	libjliPath, err := filepath.Abs(filepath.Join(filepath.Dir(jvmLibPath), "..", "jli", "libjli.dylib"))
-	if err != nil {
-		return errors.New("error resolving absolute path to 'libjli.dylib'." + err.Error())
-	}
-
+	libjliPath := filepath.Join(filepath.Dir(jvmLibPath), "..", "libjli.dylib")
 	clibjliPath := cString(libjliPath)
 	defer func() {
 		if clibjliPath != nil {
@@ -61,7 +58,7 @@ func LoadJVMLib(jvmLibPath string) error {
 	// Do not close JLI library handle until JVM closes
 	handlelibjli := C.dlopen((*C.char)(clibjliPath), C.RTLD_NOW|C.RTLD_GLOBAL)
 	if handlelibjli == nil {
-		return errors.New("could not dynamically load 'libjli.dylib'")
+		log.Printf("WARNING could not dynamically load %s", libjliPath)
 	}
 
 	cs := cString(jvmLibPath)
