@@ -35,7 +35,7 @@ import (
 	"unsafe"
 	"errors"
 	"log"
-	"filepath"
+	"path/filepath"
 )
 
 func jni_GetDefaultJavaVMInitArgs(args unsafe.Pointer) jint {
