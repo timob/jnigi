@@ -23,6 +23,7 @@ func TestAll(t *testing.T) {
 	PTestGetJVM(t)
 	PTestEnsureLocalCapacity(t)
 	PTestPushPopLocalFrame(t)
+	PTestHandleException(t)
 	PTestDestroy(t)
 }
 
@@ -356,5 +357,114 @@ func PTestPushPopLocalFrame(t *testing.T) {
 
 	if !obj.IsNil() {
 		t.Fatal("PopLocalFrame return value is not nil")
+	}
+}
+
+func PTestHandleException(t *testing.T) {
+
+	if _, err := env.NewObject("java/foo/bar"); err == nil {
+		t.Fatal("did not return error")
+	} else if err.Error() != "Java exception occured. check stderr" {
+		t.Fatalf("did not return standard error: %v", err)
+	}
+
+	env.ExceptionHandler = ThrowableToStringExceptionHandler
+	if _, err := env.NewObject("java/foo/bar"); err == nil {
+		t.Fatal("did not return error")
+	} else if err.Error() != "java.lang.NoClassDefFoundError: java/foo/bar" {
+		t.Fatalf("unexpected result of ToString: %v", err)
+	}
+
+	env.ExceptionHandler = ThrowableErrorExceptionHandler
+	if _, err := env.NewObject("java/foo/bar"); err == nil {
+		t.Fatal("did not return error")
+	} else {
+
+		throwableError, ok := err.(ThrowableError)
+		if !ok {
+			t.Fatalf("expected ThrowableError, but got %T", err)
+		}
+
+		if err.Error() != "java.lang.NoClassDefFoundError: java/foo/bar" {
+			t.Fatalf("unexpected error message: %v", err)
+		}
+
+		if v := throwableError.ClassName; v != "java.lang.NoClassDefFoundError" {
+			t.Fatalf("unexpected class name: %s", v)
+		}
+
+		if v := throwableError.LocalizedMessage; v != "java/foo/bar" {
+			t.Fatalf("unexpected localized message: %s", v)
+		}
+
+		if v := throwableError.Message; v != "java/foo/bar" {
+			t.Fatalf("unexpected message: %s", v)
+		}
+
+		if v := throwableError.AsString; v != "java.lang.NoClassDefFoundError: java/foo/bar" {
+			t.Fatalf("unexpected toString value: %s", v)
+		}
+
+		if v := throwableError.StackTrace; len(v) > 0 {
+			t.Fatal("expect empty stack trace")
+		}
+
+		if throwableError.Cause == nil {
+			t.Fatal("expected a cause")
+		}
+
+		cause := throwableError.Cause
+
+		if cause.Error() != "java.lang.ClassNotFoundException: java.foo.bar" {
+			t.Fatalf("unexpected error message: %v", cause)
+		}
+
+		if v := cause.ClassName; v != "java.lang.ClassNotFoundException" {
+			t.Fatalf("unexpected class name: %s", v)
+		}
+
+		if v := cause.LocalizedMessage; v != "java.foo.bar" {
+			t.Fatalf("unexpected localized message: %s", v)
+		}
+
+		if v := cause.Message; v != "java.foo.bar" {
+			t.Fatalf("unexpected message: %s", v)
+		}
+
+		if v := cause.AsString; v != "java.lang.ClassNotFoundException: java.foo.bar" {
+			t.Fatalf("unexpected toString value: %s", v)
+		}
+
+		if v := cause.StackTrace; v == nil {
+			t.Fatal("expected a stack trace")
+		} else if len(cause.StackTrace) == 0 {
+			t.Fatal("expected stack trace entries")
+		}
+
+		for i, v := range cause.StackTrace {
+			if v.AsString == "" {
+				t.Fatalf("stack trace index %d: no AsString value", i)
+			}
+			if v.ClassName == "" {
+				t.Fatalf("stack trace index %d: no ClassName value", i)
+			}
+			if v.FileName == "" {
+				t.Fatalf("stack trace index %d: no FileName value", i)
+			}
+			if v.MethodName == "" {
+				t.Fatalf("stack trace index %d: no MethodName value", i)
+			}
+			if v.LineNumber == 0 {
+				t.Fatalf("stack trace index %d: no LineNumber value", i)
+			}
+		}
+	}
+
+	env.ExceptionHandler = nil
+
+	if _, err := env.NewObject("java/foo/bar"); err == nil {
+		t.Fatal("did not return error")
+	} else if err.Error() != "Java exception occured. check stderr" {
+		t.Fatalf("did not return standard error: %v", err)
 	}
 }

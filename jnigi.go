@@ -69,11 +69,27 @@ type jobj interface {
 	jobj() jobject
 }
 
+// ExceptionHandler is used to convert a thrown exception (java.lang.Throwable) to a Go error.
+type ExceptionHandler interface {
+	CatchException(env *Env, exception *ObjectRef) error
+}
+
+// ExceptionHandlerFunc is an adapter to allow use of ordinary functions as an
+// ExceptionHandler. If f is a function with the appropriate signature, ExceptionHandlerFunc(f)
+// is an ExceptionHandler object that calls f.
+type ExceptionHandlerFunc func(env *Env, exception *ObjectRef) error
+
+// CatchException calls f to implement ExceptionHandler.
+func (f ExceptionHandlerFunc) CatchException(env *Env, exception *ObjectRef) error {
+	return f(env, exception)
+}
+
 type Env struct {
-	jniEnv     unsafe.Pointer
-	preCalcSig string
-	noReturnConvert bool
-	classCache map[string]jclass
+	jniEnv           unsafe.Pointer
+	preCalcSig       string
+	noReturnConvert  bool
+	classCache       map[string]jclass
+	ExceptionHandler ExceptionHandler
 }
 
 func WrapEnv(envPtr unsafe.Pointer) *Env {
@@ -156,17 +172,30 @@ func (j *Env) describeException() {
 }
 
 func (j *Env) handleException() error {
-	var eStr string
-	if e := exceptionOccurred(j.jniEnv); e == 0 {
-		eStr = "Java JNI function returned error but JNI indicates no current exception"
-	} else {
-		//TODO: return exception string here instead of just printing to stderr with "exceptionDescribe"
-		eStr = "Java exception occured. check stderr"
-		exceptionDescribe(j.jniEnv)
-		exceptionClear(j.jniEnv)
-		defer deleteLocalRef(j.jniEnv, jobject(e))
+
+	e := exceptionOccurred(j.jniEnv)
+	if e == 0 {
+		return errors.New("Java JNI function returned error but JNI indicates no current exception")
 	}
-	return errors.New(eStr)
+
+	defer deleteLocalRef(j.jniEnv, jobject(e))
+
+	ref := WrapJObject(uintptr(e), "java/lang/Throwable", false)
+
+	if j.ExceptionHandler == nil {
+		return DefaultExceptionHandler.CatchException(j, ref)
+	}
+
+	// Temporarily disable handler in the event exception rises during handling.
+	// By setting it to the DescribeExceptionHandler, exceptions will get printed
+	// and cleared.
+	handler := j.ExceptionHandler
+	j.ExceptionHandler = DescribeExceptionHandler
+	defer func() {
+		j.ExceptionHandler = handler
+	}()
+
+	return handler.CatchException(j, ref)
 }
 
 func (j *Env) NewObject(className string, args ...interface{}) (*ObjectRef, error) {
@@ -1539,3 +1568,275 @@ func (j *Env) GetUTF8String() *ObjectRef {
 
 	return utf8
 }
+
+// StackTraceElement is a struct holding the contents of java.lang.StackTraceElement
+// for use in a ThrowableError.
+type StackTraceElement struct {
+	ClassName      string
+	FileName       string
+	LineNumber     int
+	MethodName     string
+	IsNativeMethod bool
+	AsString       string
+}
+
+func (el StackTraceElement) String() string {
+	return el.AsString
+}
+
+// ThrowableError is an error struct that holds the relevant contents of a
+// java.lang.Throwable. This is the returned error from ThrowableErrorExceptionHandler.
+type ThrowableError struct {
+	ClassName        string
+	LocalizedMessage string
+	Message          string
+	StackTrace       []StackTraceElement
+	AsString         string
+	Cause            *ThrowableError
+}
+
+func (e ThrowableError) String() string {
+	return e.AsString
+}
+
+func (e ThrowableError) Error() string {
+	return e.AsString
+}
+
+func stringFromJavaLangString(env *Env, ref *ObjectRef) string {
+	if ref.IsNil() {
+		return ""
+	}
+	env.PrecalculateSignature("(Ljava/lang/String;)[B")
+	ret, err := ref.CallMethod(env, "getBytes", Byte|Array, env.GetUTF8String())
+	if err != nil {
+		return ""
+	}
+	return string(ret.([]byte))
+}
+
+func callStringMethodAndAssign(env *Env, obj *ObjectRef, method string, assign func(s string)) error {
+
+	env.PrecalculateSignature("()Ljava/lang/String;")
+	ret, err := obj.CallMethod(env, method, "java/lang/String")
+	if err != nil {
+		return err
+	}
+	strref := ret.(*ObjectRef)
+	defer env.DeleteLocalRef(strref)
+
+	assign(stringFromJavaLangString(env, strref))
+
+	return nil
+}
+
+// NewStackTraceElementFromObject creates a new StackTraceElement with its contents
+// set from the values provided in stackTraceElement's methods.
+func NewStackTraceElementFromObject(env *Env, stackTraceElement *ObjectRef) (*StackTraceElement, error) {
+
+	if stackTraceElement.IsNil() {
+		return nil, nil
+	}
+
+	getStringAndAssign := func(method string, assign func(s string)) error {
+		return callStringMethodAndAssign(env, stackTraceElement, method, assign)
+	}
+
+	out := StackTraceElement{}
+
+	// ClassName
+	if err := getStringAndAssign("getClassName", func(s string) {
+		out.ClassName = s
+	}); err != nil {
+		return nil, err
+	}
+
+	// FileName
+	if err := getStringAndAssign("getFileName", func(s string) {
+		out.FileName = s
+	}); err != nil {
+		return nil, err
+	}
+
+	// MethodName
+	if err := getStringAndAssign("getMethodName", func(s string) {
+		out.MethodName = s
+	}); err != nil {
+		return nil, err
+	}
+
+	// ToString
+	if err := getStringAndAssign("toString", func(s string) {
+		out.AsString = s
+	}); err != nil {
+		return nil, err
+	}
+
+	// LineNumber
+	{
+		env.PrecalculateSignature("()I")
+		ret, err := stackTraceElement.CallMethod(env, "getLineNumber", Int)
+		if err != nil {
+			return nil, err
+		}
+		out.LineNumber = ret.(int)
+	}
+
+	// IsNativeMethod
+	{
+		env.PrecalculateSignature("()Z")
+		ret, err := stackTraceElement.CallMethod(env, "isNativeMethod", Boolean)
+		if err != nil {
+			return nil, err
+		}
+		out.IsNativeMethod = ret.(bool)
+	}
+
+	return &out, nil
+}
+
+// NewThrowableErrorFromObject creates a new ThrowableError with its contents
+// set from the values provided in throwable's methods.
+func NewThrowableErrorFromObject(env *Env, throwable *ObjectRef) (*ThrowableError, error) {
+
+	if throwable.IsNil() {
+		return nil, nil
+	}
+
+	getStringAndAssign := func(obj *ObjectRef, method string, assign func(s string)) error {
+		return callStringMethodAndAssign(env, obj, method, assign)
+	}
+
+	out := &ThrowableError{}
+
+	// ClassName
+	{
+		objClass := getObjectClass(env.jniEnv, throwable.jobject)
+		if objClass == 0 {
+			return nil, fmt.Errorf("unable to get throwable class")
+		}
+
+		clsref := WrapJObject(uintptr(objClass), "java/lang/Class", false)
+		defer env.DeleteLocalRef(clsref)
+
+		if err := getStringAndAssign(clsref, "getName", func(s string) {
+			out.ClassName = s
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	// AsString
+	if err := getStringAndAssign(throwable, "toString", func(s string) {
+		out.AsString = s
+	}); err != nil {
+		return nil, err
+	}
+
+	// From this point on, return throwableError if a call fails, since we have some basic information.
+
+	// LocalizedMessage
+	if err := getStringAndAssign(throwable, "getLocalizedMessage", func(s string) {
+		out.LocalizedMessage = s
+	}); err != nil {
+		return out, err
+	}
+
+	// Message
+	if err := getStringAndAssign(throwable, "getMessage", func(s string) {
+		out.Message = s
+	}); err != nil {
+		return out, err
+	}
+
+	// StackTrace
+	{
+		env.PrecalculateSignature("()[Ljava/lang/StackTraceElement;")
+		ret, err := throwable.CallMethod(env, "getStackTrace", ObjectArrayType("java/lang/StackTraceElement"))
+		if err != nil {
+			return out, err
+		}
+		stkTrcArr := ret.(*ObjectRef)
+		defer env.DeleteLocalRef(stkTrcArr)
+
+		if !stkTrcArr.IsNil() {
+			stkTrcSlc := env.FromObjectArray(stkTrcArr)
+			stackTrace := make([]StackTraceElement, 0, len(stkTrcSlc))
+			for _, stkTrc := range stkTrcSlc {
+				if stkTrc.IsNil() {
+					continue
+				}
+				defer env.DeleteLocalRef(stkTrc)
+				stackTraceElement, err := NewStackTraceElementFromObject(env, stkTrc)
+				if err != nil || stackTraceElement == nil {
+					continue
+				}
+				stackTrace = append(stackTrace, *stackTraceElement)
+			}
+
+			out.StackTrace = stackTrace
+		}
+	}
+
+	// Cause
+	{
+		env.PrecalculateSignature("()Ljava/lang/Throwable;")
+		ret, err := throwable.CallMethod(env, "getCause", "java/lang/Throwable")
+		if err != nil {
+			return out, err
+		}
+		obj := ret.(*ObjectRef)
+		defer env.DeleteLocalRef(obj)
+
+		out.Cause, _ = NewThrowableErrorFromObject(env, obj)
+	}
+
+	return out, nil
+}
+
+var (
+	errThrowableConvertFail = fmt.Errorf("Java exception occured")
+
+	// DefaultExceptionHandler is an alias for DescribeExceptionHandler, which is the default.
+	DefaultExceptionHandler = DescribeExceptionHandler
+
+	// DescribeExceptionHandler calls the JNI exceptionDescribe function.
+	DescribeExceptionHandler ExceptionHandler = ExceptionHandlerFunc(func(env *Env, exception *ObjectRef) error {
+		exceptionDescribe(env.jniEnv)
+		exceptionClear(env.jniEnv)
+		return errors.New("Java exception occured. check stderr")
+	})
+
+	// ThrowableToStringExceptionHandler calls ToString on the exception and returns an error
+	// with the returned value as its Error message.
+	// If exception is nil or the toString() call fails, a generic default error is returned.
+	ThrowableToStringExceptionHandler ExceptionHandler = ExceptionHandlerFunc(func(env *Env, exception *ObjectRef) error {
+		exceptionClear(env.jniEnv)
+		if exception.IsNil() {
+			return errThrowableConvertFail
+		}
+		msg := "Java exception occured"
+		callStringMethodAndAssign(env, exception, "toString", func(s string) {
+			if s == "" {
+				return
+			}
+			msg = s
+		})
+		return errors.New(msg)
+	})
+
+	// ThrowableErrorExceptionHandler populates a new ThrowableError with the values of exception.
+	// If exception is nil, the getClass().getName(), or the toString call fails, a generic default
+	// error is returned.
+	ThrowableErrorExceptionHandler ExceptionHandler = ExceptionHandlerFunc(func(env *Env, exception *ObjectRef) error {
+		exceptionClear(env.jniEnv)
+		if exception.IsNil() {
+			return errThrowableConvertFail
+		}
+		throwableError, _ := NewThrowableErrorFromObject(env, exception)
+		if throwableError == nil {
+			return errThrowableConvertFail
+		}
+		return *throwableError
+	})
+)
