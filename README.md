@@ -31,7 +31,8 @@ On Linux a solution is using LD_PRELOAD with a library that intercepts sigaction
 * Documentation needed.
 
 ## Changes
-* 2020-11-08 Add DestroyJavaVM support, JNI_VERSION_1_8 const
+* 2020-08-21 Add ExceptionHandler interface for handling Java exceptions. Add 3 general handlers DescribeExceptionHandler (default), ThrowableToStringExceptionHandler and ThrowableErrorExceptionHandler.
+* 2020-08-11 Add DestroyJavaVM support, JNI_VERSION_1_8 const
 * 2019-05-29 Better multiplatform support, dynamic loading of JVM library.
 * 2016-08-01 Initial version.
 
