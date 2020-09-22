@@ -832,6 +832,15 @@ type convertedArray interface {
 	getType() Type
 }
 
+// Allow return types to be a string that specifies an object type. This is to
+// retain compatiblity.
+func typeOfReturnValue(value interface{}) (t Type, className string, err error) {
+	if v, ok := value.(string); ok {
+		return typeOfValue(ObjectType(v))
+	}
+	return typeOfValue(value)
+}
+
 func typeOfValue(value interface{}) (t Type, className string, err error) {
 	switch v := value.(type) {
 	case Type:
@@ -839,9 +848,6 @@ func typeOfValue(value interface{}) (t Type, className string, err error) {
 		if t.baseType() == Object {
 			className = "java/lang/Object"
 		}
-	case string:
-		t = Object
-		className = v
 	case ObjectType:
 		t = Object
 		className = string(v)
@@ -903,7 +909,7 @@ func typeOfValue(value interface{}) (t Type, className string, err error) {
 		t = v.getType()
 		className = "java/lang/Object"
 	default:
-		err = fmt.Errorf("JNIGI: unknown type %t (%v)", v, v)
+		err = fmt.Errorf("JNIGI: unknown type %T (value = %v)", v, v)
 	}
 	return
 }
@@ -1018,7 +1024,7 @@ func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface
 		return nil, err
 	}
 
-	rType, rClassName, err := typeOfValue(returnType)
+	rType, rClassName, err := typeOfReturnValue(returnType)
 	if err != nil {
 		return nil, err
 	}
@@ -1107,7 +1113,7 @@ func (j *Env) CallStaticMethod(className string, methodName string, returnType i
 		return nil, err
 	}
 
-	rType, rClassName, err := typeOfValue(returnType)
+	rType, rClassName, err := typeOfReturnValue(returnType)
 	if err != nil {
 		return nil, err
 	}
@@ -1216,7 +1222,7 @@ func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}) 
 		return nil, err
 	}
 
-	fType, fClassName, err := typeOfValue(fieldType)
+	fType, fClassName, err := typeOfReturnValue(fieldType)
 	if err != nil {
 		return nil, err
 	}
@@ -1350,7 +1356,7 @@ func (j *Env) GetStaticField(className string, fieldName string, fieldType inter
 		return nil, err
 	}
 
-	fType, fClassName, err := typeOfValue(fieldType)
+	fType, fClassName, err := typeOfReturnValue(fieldType)
 	if err != nil {
 		return nil, err
 	}
@@ -1486,7 +1492,7 @@ func (j *Env) RegisterNative(className, methodName string, returnType interface{
 
 	mnCstr := cString(methodName)
 	defer free(mnCstr)
-	rType, rClassName, err := typeOfValue(returnType)
+	rType, rClassName, err := typeOfReturnValue(returnType)
 	if err != nil {
 		return err
 	}
