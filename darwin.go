@@ -35,7 +35,14 @@ import (
 	"unsafe"
 	"errors"
 	"log"
+	"os"
 	"path/filepath"
+)
+
+const (
+	JLI_LOAD_ENV = "LIBJLI_LOAD"
+	JLI_LOAD_YES = "yes"
+	JLI_LOAD_FORCE = "force"
 )
 
 func jni_GetDefaultJavaVMInitArgs(args unsafe.Pointer) jint {
@@ -47,19 +54,28 @@ func jni_CreateJavaVM(pvm unsafe.Pointer, penv unsafe.Pointer, args unsafe.Point
 }
 
 func LoadJVMLib(jvmLibPath string) error {
-	// On MacOS we need to preload libjli.dylib to workaround JDK-7131356 "No Java runtime present, requesting install"
-	libjliPath := filepath.Join(filepath.Dir(jvmLibPath), "..", "libjli.dylib")
-	clibjliPath := cString(libjliPath)
-	defer func() {
-		if clibjliPath != nil {
-			free(clibjliPath)
-		}
-	}()
+	// On MacOS we need to preload libjli.dylib to workaround JDK-7131356
+	// "No Java runtime present, requesting install".
+	// If envar LIBJLI_LOAD; = "yes": load but just log error if load fails, =
+	// "force": load and exit with error if load fails.
+	if jliLoadEnv := os.Getenv(JLI_LOAD_ENV); jliLoadEnv == JLI_LOAD_YES || jliLoadEnv == JLI_LOAD_FORCE {
+		libjliPath := filepath.Join(filepath.Dir(jvmLibPath), "..", "libjli.dylib")
+		clibjliPath := cString(libjliPath)
+		defer func() {
+			if clibjliPath != nil {
+				free(clibjliPath)
+			}
+		}()
 
-	// Do not close JLI library handle until JVM closes
-	handlelibjli := C.dlopen((*C.char)(clibjliPath), C.RTLD_NOW|C.RTLD_GLOBAL)
-	if handlelibjli == nil {
-		log.Printf("WARNING could not dynamically load %s", libjliPath)
+		// Do not close JLI library handle until JVM closes
+		handlelibjli := C.dlopen((*C.char)(clibjliPath), C.RTLD_NOW|C.RTLD_GLOBAL)
+		if handlelibjli == nil {
+			if jliLoadEnv == JLI_LOAD_YES {
+				log.Printf("WARNING could not dynamically load %s", libjliPath)
+			} else if jliLoadEnv == JLI_LOAD_FORCE {
+				log.Fatalf("ERROR could not dynamically load %s", libjliPath)
+			}
+		}
 	}
 
 	cs := cString(jvmLibPath)
