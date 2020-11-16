@@ -1082,6 +1082,7 @@ func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface
 		retVal = float64(callDoubleMethodA(env.jniEnv, o.jobject, mid, jniArgs))
 	case rType == Object || rType.isArray():
 		obj := callObjectMethodA(env.jniEnv, o.jobject, mid, jniArgs)
+		refs = append(refs, obj)
 		if rType == Object || rType == Object|Array || env.noReturnConvert {
 			retVal = &ObjectRef{obj, rClassName, rType.isArray()}
 		} else {
