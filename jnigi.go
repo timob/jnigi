@@ -1086,6 +1086,7 @@ func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface
 			retVal = &ObjectRef{obj, rClassName, rType.isArray()}
 		} else {
 			arrayToConvert = obj
+			refs = append(refs, obj)
 		}
 	default:
 		return nil, errors.New("JNIGI unknown return type")
