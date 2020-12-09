@@ -9,7 +9,7 @@ The `CGO_CFLAGS` needs to be set to add the JNI C header files. The `compilevars
 this.
 ```
 # put this in your build script
-source <gopath>/src/github.com/timob/jnigi/compilevars.sh <root path of jdk>
+source <gopath>/src/tekao.net/jnigi/compilevars.sh <root path of jdk>
 ```
 
 On Windows you can use `compilevars.bat` in the same way (but you don't need `source` at the begining).
@@ -31,6 +31,7 @@ On Linux a solution is using LD_PRELOAD with a library that intercepts sigaction
 * Documentation needed.
 
 ## Changes
+* 2020-12-09 Add go.mod file, updated import path to tekao.net/jnigi.
 * 2020-08-21 Add ExceptionHandler interface for handling Java exceptions. Add 3 general handlers DescribeExceptionHandler (default), ThrowableToStringExceptionHandler and ThrowableErrorExceptionHandler.
 * 2020-08-11 Add DestroyJavaVM support, JNI_VERSION_1_8 const
 * 2019-05-29 Better multiplatform support, dynamic loading of JVM library.
@@ -43,7 +44,7 @@ package main
 
 import (
     "fmt"
-    "github.com/timob/jnigi"
+    "tekao.net/jnigi"
     "log"
 )
 

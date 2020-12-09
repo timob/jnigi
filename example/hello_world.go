@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/timob/jnigi"
+	"tekao.net/jnigi"
 	"log"
 )
 
