@@ -1108,6 +1108,96 @@ func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface
 	return retVal, nil
 }
 
+func (o *ObjectRef) CallNonvirtualMethod(env *Env, className string, methodName string, returnType interface{}, args ...interface{}) (interface{}, error) {
+	class, err := env.callFindClass(className)
+	if err != nil {
+		return nil, err
+	}
+
+	rType, rClassName, err := typeOfReturnValue(returnType)
+	if err != nil {
+		return nil, err
+	}
+
+	var methodSig string
+	if env.preCalcSig != "" {
+		methodSig = env.preCalcSig
+		env.preCalcSig = ""
+	} else {
+		calcSig, err := sigForMethod(rType, rClassName, args)
+		if err != nil {
+			return nil, err
+		}
+		methodSig = calcSig
+	}
+
+	mid, err := env.callGetMethodID(false, class, methodName, methodSig)
+	if err != nil {
+		return nil, err
+	}
+
+	// create args for jni call
+	jniArgs, refs, err := env.createArgs(args)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		cleanUpArgs(jniArgs)
+		for _, ref := range refs {
+			deleteLocalRef(env.jniEnv, ref)
+		}
+	}()
+
+	var arrayToConvert jobject
+	var retVal interface{}
+
+	switch {
+	case rType == Void:
+		callNonvirtualVoidMethodA(env.jniEnv, o.jobject, class, mid, jniArgs)
+	case rType == Boolean:
+		retVal = toBool(callNonvirtualBooleanMethodA(env.jniEnv, o.jobject, class, mid, jniArgs))
+	case rType == Byte:
+		retVal = byte(callNonvirtualByteMethodA(env.jniEnv, o.jobject, class, mid, jniArgs))
+	case rType == Char:
+		retVal = uint16(callNonvirtualCharMethodA(env.jniEnv, o.jobject, class, mid, jniArgs))
+	case rType == Short:
+		retVal = int16(callNonvirtualShortMethodA(env.jniEnv, o.jobject, class, mid, jniArgs))
+	case rType == Int:
+		retVal = int(callNonvirtualIntMethodA(env.jniEnv, o.jobject, class, mid, jniArgs))
+	case rType == Long:
+		retVal = int64(callNonvirtualLongMethodA(env.jniEnv, o.jobject, class, mid, jniArgs))
+	case rType == Float:
+		retVal = float32(callNonvirtualFloatMethodA(env.jniEnv, o.jobject, class, mid, jniArgs))
+	case rType == Double:
+		retVal = float64(callNonvirtualDoubleMethodA(env.jniEnv, o.jobject, class, mid, jniArgs))
+	case rType == Object || rType.isArray():
+		obj := callNonvirtualObjectMethodA(env.jniEnv, o.jobject, class, mid, jniArgs)
+		if rType == Object || rType == Object|Array || env.noReturnConvert {
+			retVal = &ObjectRef{obj, rClassName, rType.isArray()}
+		} else {
+			arrayToConvert = obj
+			refs = append(refs, obj)
+		}
+	default:
+		return nil, errors.New("JNIGI unknown return type")
+	}
+
+	env.noReturnConvert = false
+
+	if env.exceptionCheck() {
+		return nil, env.handleException()
+	}
+
+	if arrayToConvert != 0 {
+		retVal, err = env.toGoArray(arrayToConvert, rType)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return retVal, nil
+}
+
 func (j *Env) CallStaticMethod(className string, methodName string, returnType interface{}, args ...interface{}) (interface{}, error) {
 	class, err := j.callFindClass(className)
 	if err != nil {

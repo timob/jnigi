@@ -581,6 +581,47 @@ jint DestroyJavaVM(JavaVM* vm) {
 jint GetJavaVM(JNIEnv* env, JavaVM** vm) {
 	return (*env)->GetJavaVM (env, vm);
 }
+
+jobject CallNonvirtualObjectMethodA(JNIEnv* env, jobject obj, jclass clazz, jmethodID methodID, jvalue* args) {
+	return (*env)->CallNonvirtualObjectMethodA (env, obj, clazz, methodID, args);
+}
+
+jboolean CallNonvirtualBooleanMethodA(JNIEnv* env, jobject obj, jclass clazz, jmethodID methodID, jvalue* args) {
+	return (*env)->CallNonvirtualBooleanMethodA (env, obj, clazz, methodID, args);
+}
+
+jbyte CallNonvirtualByteMethodA(JNIEnv* env, jobject obj, jclass clazz, jmethodID methodID, jvalue* args) {
+	return (*env)->CallNonvirtualByteMethodA (env, obj, clazz, methodID, args);
+}
+
+jchar CallNonvirtualCharMethodA(JNIEnv* env, jobject obj, jclass clazz, jmethodID methodID, jvalue* args) {
+	return (*env)->CallNonvirtualCharMethodA (env, obj, clazz, methodID, args);
+}
+
+jshort CallNonvirtualShortMethodA(JNIEnv* env, jobject obj, jclass clazz, jmethodID methodID, jvalue* args) {
+	return (*env)->CallNonvirtualShortMethodA (env, obj, clazz, methodID, args);
+}
+
+jint CallNonvirtualIntMethodA(JNIEnv* env, jobject obj, jclass clazz, jmethodID methodID, jvalue* args) {
+	return (*env)->CallNonvirtualIntMethodA (env, obj, clazz, methodID, args);
+}
+
+jlong CallNonvirtualLongMethodA(JNIEnv* env, jobject obj, jclass clazz, jmethodID methodID, jvalue* args) {
+	return (*env)->CallNonvirtualLongMethodA (env, obj, clazz, methodID, args);
+}
+
+jfloat CallNonvirtualFloatMethodA(JNIEnv* env, jobject obj, jclass clazz, jmethodID methodID, jvalue* args) {
+	return (*env)->CallNonvirtualFloatMethodA (env, obj, clazz, methodID, args);
+}
+
+jdouble CallNonvirtualDoubleMethodA(JNIEnv* env, jobject obj, jclass clazz, jmethodID methodID, jvalue* args) {
+	return (*env)->CallNonvirtualDoubleMethodA (env, obj, clazz, methodID, args);
+}
+
+void CallNonvirtualVoidMethodA(JNIEnv* env, jobject obj, jclass clazz, jmethodID methodID, jvalue* args) {
+	(*env)->CallNonvirtualVoidMethodA (env, obj, clazz, methodID, args);
+}
+
 */
 import "C"
 
@@ -1195,3 +1236,45 @@ func destroyJavaVM(vm unsafe.Pointer) jint {
 func getJavaVM(env unsafe.Pointer, vm unsafe.Pointer) jint {
 	return jint(C.GetJavaVM((*C.JNIEnv)(env), (**C.JavaVM)(vm)))
 } 
+
+/* CallNonvirtual funcs... */
+
+func callNonvirtualObjectMethodA(env unsafe.Pointer, obj jobject, clazz jclass, methodID jmethodID, args unsafe.Pointer) jobject {
+	return jobject(unsafe.Pointer(C.CallNonvirtualObjectMethodA((*C.JNIEnv)(env), C.jobject(unsafe.Pointer(obj)), C.jclass(unsafe.Pointer(clazz)), C.jmethodID(unsafe.Pointer(methodID)), (*C.jvalue)(args))))
+}
+
+func callNonvirtualBooleanMethodA(env unsafe.Pointer, obj jobject, clazz jclass, methodID jmethodID, args unsafe.Pointer) jboolean {
+	return jboolean(C.CallNonvirtualBooleanMethodA((*C.JNIEnv)(env), C.jobject(unsafe.Pointer(obj)), C.jclass(unsafe.Pointer(clazz)), C.jmethodID(unsafe.Pointer(methodID)), (*C.jvalue)(args)))
+}
+
+func callNonvirtualByteMethodA(env unsafe.Pointer, obj jobject, clazz jclass, methodID jmethodID, args unsafe.Pointer) jbyte {
+	return jbyte(C.CallNonvirtualByteMethodA((*C.JNIEnv)(env), C.jobject(unsafe.Pointer(obj)), C.jclass(unsafe.Pointer(clazz)), C.jmethodID(unsafe.Pointer(methodID)), (*C.jvalue)(args)))
+}
+
+func callNonvirtualCharMethodA(env unsafe.Pointer, obj jobject, clazz jclass, methodID jmethodID, args unsafe.Pointer) jchar {
+	return jchar(C.CallNonvirtualCharMethodA((*C.JNIEnv)(env), C.jobject(unsafe.Pointer(obj)), C.jclass(unsafe.Pointer(clazz)), C.jmethodID(unsafe.Pointer(methodID)), (*C.jvalue)(args)))
+}
+
+func callNonvirtualShortMethodA(env unsafe.Pointer, obj jobject, clazz jclass, methodID jmethodID, args unsafe.Pointer) jshort {
+	return jshort(C.CallNonvirtualShortMethodA((*C.JNIEnv)(env), C.jobject(unsafe.Pointer(obj)), C.jclass(unsafe.Pointer(clazz)), C.jmethodID(unsafe.Pointer(methodID)), (*C.jvalue)(args)))
+}
+
+func callNonvirtualIntMethodA(env unsafe.Pointer, obj jobject, clazz jclass, methodID jmethodID, args unsafe.Pointer) jint {
+	return jint(C.CallNonvirtualIntMethodA((*C.JNIEnv)(env), C.jobject(unsafe.Pointer(obj)), C.jclass(unsafe.Pointer(clazz)), C.jmethodID(unsafe.Pointer(methodID)), (*C.jvalue)(args)))
+}
+
+func callNonvirtualLongMethodA(env unsafe.Pointer, obj jobject, clazz jclass, methodID jmethodID, args unsafe.Pointer) jlong {
+	return jlong(C.CallNonvirtualLongMethodA((*C.JNIEnv)(env), C.jobject(unsafe.Pointer(obj)), C.jclass(unsafe.Pointer(clazz)), C.jmethodID(unsafe.Pointer(methodID)), (*C.jvalue)(args)))
+}
+
+func callNonvirtualFloatMethodA(env unsafe.Pointer, obj jobject, clazz jclass, methodID jmethodID, args unsafe.Pointer) jfloat {
+	return jfloat(C.CallNonvirtualFloatMethodA((*C.JNIEnv)(env), C.jobject(unsafe.Pointer(obj)), C.jclass(unsafe.Pointer(clazz)), C.jmethodID(unsafe.Pointer(methodID)), (*C.jvalue)(args)))
+}
+
+func callNonvirtualDoubleMethodA(env unsafe.Pointer, obj jobject, clazz jclass, methodID jmethodID, args unsafe.Pointer) jdouble {
+	return jdouble(C.CallNonvirtualDoubleMethodA((*C.JNIEnv)(env), C.jobject(unsafe.Pointer(obj)), C.jclass(unsafe.Pointer(clazz)), C.jmethodID(unsafe.Pointer(methodID)), (*C.jvalue)(args)))
+}
+
+func callNonvirtualVoidMethodA(env unsafe.Pointer, obj jobject, clazz jclass, methodID jmethodID, args unsafe.Pointer) {
+	C.CallNonvirtualVoidMethodA((*C.JNIEnv)(env), C.jobject(unsafe.Pointer(obj)), C.jclass(unsafe.Pointer(clazz)), C.jmethodID(unsafe.Pointer(methodID)), (*C.jvalue)(args))
+}
