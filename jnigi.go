@@ -1587,7 +1587,19 @@ func (j *Env) RegisterNative(className, methodName string, returnType interface{
 	if err != nil {
 		return err
 	}
-	sig, err := sigForMethod(rType, rClassName, params)
+
+	// Convert strings in params to ObjectType. This to retain compaibility.
+	// with code that assumes strings signify ObjectType.
+	compatPrm := make([]interface{}, len(params))
+	for i, param := range params {
+		if v, ok := param.(string); ok {
+			compatPrm[i] = ObjectType(v)
+		} else {
+			compatPrm[i] = param
+		}
+	}
+
+	sig, err := sigForMethod(rType, rClassName, compatPrm)
 	if err != nil {
 		return err
 	}
