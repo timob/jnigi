@@ -21,7 +21,7 @@ There is a function `AttemptToFindJVMLibPath() string` to help to find the libra
 
 ## Status
 * Has been used in Go (many versions since 1.6) executable multi threaded applications on Linux / Windows.
-* Tests for main functions tests are present.
+* Tests for main functions are present.
 
 ## Changes
 * 2021-12-05 Version 2: New idiomatic API. Converter interfaces. Add docs.
