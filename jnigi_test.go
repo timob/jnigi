@@ -17,6 +17,7 @@ func TestAll(t *testing.T) {
 	PTestInit(t)
 	PTestBasic(t)
 	PTestObjectArrays(t)
+	PTestConvert(t)
 	PTestInstanceOf(t)
 	PTestByteArray(t)
 	PTestAttach(t)
@@ -229,6 +230,33 @@ func PTestObjectArrays(t *testing.T) {
 	t.Logf("%s", string(className))
 }
 
+
+type GoString string
+
+func (g *GoString) ConvertToGo(obj *ObjectRef) error {
+	var goBytes []byte
+	if err := obj.CallMethod(env, "getBytes", Byte|Array, &goBytes); err != nil {
+		return err
+	}
+	*g = GoString(goBytes)
+	return nil
+}
+
+func PTestConvert(t *testing.T) {
+	str, err := env.NewObject("java/lang/String", []byte("test string"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var firstWord GoString
+	if err := str.CallMethod(env, "substring", "java/lang/String", &firstWord, 0, 4); err != nil {
+		t.Fatal(err)
+	}
+	if firstWord != "test" {
+		t.Logf("convert test failed got %s", firstWord)
+	}
+}
+
 func PTestInstanceOf(t *testing.T) {
 	alist, err := env.NewObject("java/util/ArrayList")
 	if err != nil {
@@ -274,14 +302,12 @@ func PTestByteArray(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var obj ObjectRef
-
-	env.NoReturnConvert()
-	if err := str.CallMethod(env, "getBytes", Byte|Array, &obj, env.GetUTF8String()); err != nil {
+	var arr ArrayRef
+	if err := str.CallMethod(env, "getBytes", Byte|Array, &arr, env.GetUTF8String()); err != nil {
 		t.Fatal(err)
 	}
 
-	ba2 := env.NewByteArrayFromObject(&obj)
+	ba2 := env.NewByteArrayFromObject(arr.ObjectRef)
 	bytes = ba2.GetCritical(env)
 	if string(bytes) != "hello world" {
 		t.Logf("ByteArray test failed")

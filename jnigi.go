@@ -1019,34 +1019,28 @@ func (o *ObjectRef) getClass(env *Env) (class jclass, err error) {
 }
 
 func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface{}, dest interface{}, args ...interface{}) error {
-	// Is it worth having env.noReturnConvert still? If we add CallObjectMethod probably not.
-	noReturnConvert := env.noReturnConvert
-	env.noReturnConvert = false
-
 	rType, rClassName, err := typeOfReturnValue(returnType)
 	if err != nil {
 		return err
 	}
 
-	// If return type is an array of convertable java to go types, do the conversion
-	if rType.isArray() && rType != Object|Array && !noReturnConvert {
-		toConvert, err := o.genericCallMethod(env, methodName, rType, rClassName, args...)
-		if err != nil {
-			return err
-		}
+	retVal, err := o.genericCallMethod(env, methodName, rType, rClassName, args...)
+	if err != nil {
+		return err
+	}
 
-		converted, err := env.toGoArray(toConvert.(*ObjectRef).jobject, rType)
-		deleteLocalRef(env.jniEnv, toConvert.(*ObjectRef).jobject)
+	if v, ok := dest.(ToGoConverter); ok && (rType & Object == Object || rType & Array == Array) {
+		return v.ConvertToGo(retVal.(*ObjectRef))
+	} else if rType.isArray() && rType != Object|Array {
+		// If return type is an array of convertable java to go types, do the conversion
+		converted, err := env.toGoArray(retVal.(*ObjectRef).jobject, rType)
+		deleteLocalRef(env.jniEnv, retVal.(*ObjectRef).jobject)
 		if err != nil {
 			return err
 		}
 
 		return assignDest(converted, dest)
 	} else {
-		retVal, err := o.genericCallMethod(env, methodName, rType, rClassName, args...)
-		if err != nil {
-			return err
-		}
 		return assignDest(retVal, dest)
 	}
 }
@@ -1122,34 +1116,28 @@ func (o *ObjectRef) genericCallMethod(env *Env, methodName string, rType Type, r
 }
 
 func (o *ObjectRef) CallNonvirtualMethod(env *Env, className string, methodName string, returnType interface{}, dest interface{}, args ...interface{}) error {
-	// Is it worth having env.noReturnConvert still? If we add CallObjectMethod probably not.
-	noReturnConvert := env.noReturnConvert
-	env.noReturnConvert = false
-
 	rType, rClassName, err := typeOfReturnValue(returnType)
 	if err != nil {
 		return err
 	}
 
-	// If return type is an array of convertable java to go types, do the conversion
-	if rType.isArray() && rType != Object|Array && !noReturnConvert {
-		toConvert, err := o.genericCallNonvirtualMethod(env, className, methodName, rType, rClassName, args...)
-		if err != nil {
-			return err
-		}
+	retVal, err := o.genericCallNonvirtualMethod(env, className, methodName, rType, rClassName, args...)
+	if err != nil {
+		return err
+	}
 
-		converted, err := env.toGoArray(toConvert.(*ObjectRef).jobject, rType)
-		deleteLocalRef(env.jniEnv, toConvert.(*ObjectRef).jobject)
+	if v, ok := dest.(ToGoConverter); ok && (rType & Object == Object || rType & Array == Array) {
+		return v.ConvertToGo(retVal.(*ObjectRef))
+	} else if rType.isArray() && rType != Object|Array {
+		// If return type is an array of convertable java to go types, do the conversion
+		converted, err := env.toGoArray(retVal.(*ObjectRef).jobject, rType)
+		deleteLocalRef(env.jniEnv, retVal.(*ObjectRef).jobject)
 		if err != nil {
 			return err
 		}
 
 		return assignDest(converted, dest)
 	} else {
-		retVal, err := o.genericCallNonvirtualMethod(env, className, methodName, rType, rClassName, args...)
-		if err != nil {
-			return err
-		}
 		return assignDest(retVal, dest)
 	}
 }
@@ -1225,34 +1213,28 @@ func (o *ObjectRef) genericCallNonvirtualMethod(env *Env, className string, meth
 }
 
 func (j *Env) CallStaticMethod(className string, methodName string, returnType interface{}, dest interface{}, args ...interface{}) error {
-	// Is it worth having env.noReturnConvert still? If we add CallObjectMethod probably not.
-	noReturnConvert := j.noReturnConvert
-	j.noReturnConvert = false
-
 	rType, rClassName, err := typeOfReturnValue(returnType)
 	if err != nil {
 		return err
 	}
 
-	// If return type is an array of convertable java to go types, do the conversion
-	if rType.isArray() && rType != Object|Array && !noReturnConvert {
-		toConvert, err := j.genericCallStaticMethod(className, methodName, rType, rClassName, args...)
-		if err != nil {
-			return err
-		}
+	retVal, err := j.genericCallStaticMethod(className, methodName, rType, rClassName, args...)
+	if err != nil {
+		return err
+	}
 
-		converted, err := j.toGoArray(toConvert.(*ObjectRef).jobject, rType)
-		deleteLocalRef(j.jniEnv, toConvert.(*ObjectRef).jobject)
+	if v, ok := dest.(ToGoConverter); ok && (rType & Object == Object || rType & Array == Array) {
+		return v.ConvertToGo(retVal.(*ObjectRef))
+	} else if rType.isArray() && rType != Object|Array {
+		// If return type is an array of convertable java to go types, do the conversion
+		converted, err := j.toGoArray(retVal.(*ObjectRef).jobject, rType)
+		deleteLocalRef(j.jniEnv, retVal.(*ObjectRef).jobject)
 		if err != nil {
 			return err
 		}
 
 		return assignDest(converted, dest)
 	} else {
-		retVal, err := j.genericCallStaticMethod(className, methodName, rType, rClassName, args...)
-		if err != nil {
-			return err
-		}
 		return assignDest(retVal, dest)
 	}
 }
@@ -1349,35 +1331,29 @@ func (j *Env) callGetFieldID(static bool, class jclass, name, sig string) (jfiel
 
 
 func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}, dest interface{}) error {
-	// Is it worth having env.noReturnConvert still? If we add CallObjectMethod probably not.
-	noReturnConvert := env.noReturnConvert
-	env.noReturnConvert = false
-
 	fType, fClassName, err := typeOfReturnValue(fieldType)
 	if err != nil {
 		return err
 	}
 
-	// If return type is an array of convertable java to go types, do the conversion
-	if fType.isArray() && fType != Object|Array && !noReturnConvert {
-		toConvert, err := o.genericGetField(env, fieldName, fType, fClassName)
-		if err != nil {
-			return err
-		}
+	fieldVal, err := o.genericGetField(env, fieldName, fType, fClassName)
+	if err != nil {
+		return err
+	}
 
-		converted, err := env.toGoArray(toConvert.(*ObjectRef).jobject, fType)
-		deleteLocalRef(env.jniEnv, toConvert.(*ObjectRef).jobject)
+	if v, ok := dest.(ToGoConverter); ok && (fType & Object == Object || fType & Array == Array) {
+		return v.ConvertToGo(fieldVal.(*ObjectRef))
+	} else if fType.isArray() && fType != Object|Array {
+		// If return type is an array of convertable java to go types, do the conversion
+		converted, err := env.toGoArray(fieldVal.(*ObjectRef).jobject, fType)
+		deleteLocalRef(env.jniEnv, fieldVal.(*ObjectRef).jobject)
 		if err != nil {
 			return err
 		}
 
 		return assignDest(converted, dest)
 	} else {
-		retVal, err := o.genericGetField(env, fieldName, fType, fClassName)
-		if err != nil {
-			return err
-		}
-		return assignDest(retVal, dest)
+		return assignDest(fieldVal, dest)
 	}
 }
 
@@ -1498,35 +1474,29 @@ func (o *ObjectRef) SetField(env *Env, fieldName string, value interface{}) erro
 
 
 func (j *Env) GetStaticField(className string, fieldName string, fieldType interface{}, dest interface{}) error {
-	// Is it worth having env.noReturnConvert still? If we add CallObjectMethod probably not.
-	noReturnConvert := j.noReturnConvert
-	j.noReturnConvert = false
-
 	fType, fClassName, err := typeOfReturnValue(fieldType)
 	if err != nil {
 		return err
 	}
 
-	// If return type is an array of convertable java to go types, do the conversion
-	if fType.isArray() && fType != Object|Array && !noReturnConvert {
-		toConvert, err := j.genericGetStaticField(className, fieldName, fType, fClassName)
-		if err != nil {
-			return err
-		}
+	fieldVal, err := j.genericGetStaticField(className, fieldName, fType, fClassName)
+	if err != nil {
+		return err
+	}
 
-		converted, err := j.toGoArray(toConvert.(*ObjectRef).jobject, fType)
-		deleteLocalRef(j.jniEnv, toConvert.(*ObjectRef).jobject)
+	if v, ok := dest.(ToGoConverter); ok && (fType & Object == Object || fType & Array == Array) {
+		return v.ConvertToGo(fieldVal.(*ObjectRef))
+	} else if fType.isArray() && fType != Object|Array {
+		// If return type is an array of convertable java to go types, do the conversion
+		converted, err := j.toGoArray(fieldVal.(*ObjectRef).jobject, fType)
+		deleteLocalRef(j.jniEnv, fieldVal.(*ObjectRef).jobject)
 		if err != nil {
 			return err
 		}
 
 		return assignDest(converted, dest)
 	} else {
-		retVal, err := j.genericGetStaticField(className, fieldName, fType, fClassName)
-		if err != nil {
-			return err
-		}
-		return assignDest(retVal, dest)
+		return assignDest(fieldVal, dest)
 	}
 }
 
