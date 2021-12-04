@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build darwin
 // +build darwin
 
 package jnigi
@@ -32,16 +33,16 @@ jint dyn_JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
 import "C"
 
 import (
-	"unsafe"
 	"errors"
 	"log"
 	"os"
 	"path/filepath"
+	"unsafe"
 )
 
 const (
-	JLI_LOAD_ENV = "LIBJLI_LOAD"
-	JLI_LOAD_YES = "yes"
+	JLI_LOAD_ENV   = "LIBJLI_LOAD"
+	JLI_LOAD_YES   = "yes"
 	JLI_LOAD_FORCE = "force"
 )
 

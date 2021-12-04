@@ -1235,7 +1235,7 @@ func destroyJavaVM(vm unsafe.Pointer) jint {
 
 func getJavaVM(env unsafe.Pointer, vm unsafe.Pointer) jint {
 	return jint(C.GetJavaVM((*C.JNIEnv)(env), (**C.JavaVM)(vm)))
-} 
+}
 
 /* CallNonvirtual funcs... */
 

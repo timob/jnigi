@@ -1,10 +1,10 @@
 package jnigi
 
 import (
-	"os"
-	"runtime"
-	"path/filepath"
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
 )
 
 // AttemptToFindJVMLibPath tries to find the full path to the JVM shared library file

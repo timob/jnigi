@@ -11,7 +11,6 @@ import (
 var env *Env
 var jvm *JVM
 
-
 // Run them all here so we can be sure they run on the same Goroutine
 func TestAll(t *testing.T) {
 	PTestInit(t)
@@ -94,7 +93,6 @@ func PTestBasic(t *testing.T) {
 	if err := str.CallMethod(env, "substring", "java/lang/String", &str2, 6); err != nil {
 		t.Fatal(err)
 	}
-
 
 	if err := str2.CallMethod(env, "getBytes", Byte|Array, nil); err != nil {
 		t.Fatal(err)
@@ -229,7 +227,6 @@ func PTestObjectArrays(t *testing.T) {
 	}
 	t.Logf("%s", string(className))
 }
-
 
 type GoString string
 

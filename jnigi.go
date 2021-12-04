@@ -23,8 +23,8 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
-	"unsafe"
 	"strings"
+	"unsafe"
 )
 
 // copy arguments in to C memory before passing to jni functions
@@ -172,10 +172,10 @@ func (j *JVM) DetachCurrentThread() error {
 
 // Destroy calls JNI DestroyJavaVM
 func (j *JVM) Destroy() error {
- 	if destroyJavaVM(j.javaVM) < 0 {
- 		return errors.New("JNIGI: destroyJavaVM error")
- 	}
- 	return nil
+	if destroyJavaVM(j.javaVM) < 0 {
+		return errors.New("JNIGI: destroyJavaVM error")
+	}
+	return nil
 }
 
 // GetJVM Calls JNI GetJavaVM. Calls runtime.LockOSThread() first.
@@ -275,7 +275,6 @@ func (j *Env) NewObject(className string, args ...interface{}) (*ObjectRef, erro
 
 	return &ObjectRef{obj, className, false}, nil
 }
-
 
 func (j *Env) callFindClass(className string) (jclass, error) {
 	if v, ok := j.classCache[className]; ok {
@@ -480,7 +479,7 @@ func (j *Env) ToObjectArray(objRefs []*ObjectRef, className string) (arrayRef *O
 // ByteArray holds a JNI JbyteArray
 type ByteArray struct {
 	arr jbyteArray
-	n int
+	n   int
 }
 
 // NewByteArray calls JNI NewByteArray
@@ -598,7 +597,7 @@ func (j *Env) toJavaArray(src interface{}) (jobject, error) {
 		var ptr unsafe.Pointer
 		if copyToC {
 			ptr = malloc(uintptr(len(v)))
-		    defer free(ptr)
+			defer free(ptr)
 			data := (*(*[big]byte)(ptr))[:len(v)]
 			copy(data, v)
 		} else {
@@ -841,7 +840,7 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 	if copyToC {
 		ptr = malloc(unsafe.Sizeof(uint64(0)) * uintptr(len(args)))
 		data := (*(*[big]uint64)(ptr))[:len(args)]
-		copy(data, argList)	
+		copy(data, argList)
 	} else {
 		ptr = unsafe.Pointer(&argList[0])
 	}
@@ -1051,7 +1050,7 @@ func (o *ObjectRef) getClass(env *Env) (class jclass, err error) {
 		}
 		defer env.DeleteLocalRef(strObj)
 		var b []byte
-		if err := strObj.CallMethod(env, "getBytes", Byte | Array, &b, env.GetUTF8String()); err != nil {
+		if err := strObj.CallMethod(env, "getBytes", Byte|Array, &b, env.GetUTF8String()); err != nil {
 			return 0, err
 		}
 		gotClass := string(b)
@@ -1082,7 +1081,7 @@ func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface
 		return err
 	}
 
-	if v, ok := dest.(ToGoConverter); ok && (rType & Object == Object || rType & Array == Array) {
+	if v, ok := dest.(ToGoConverter); ok && (rType&Object == Object || rType&Array == Array) {
 		return v.ConvertToGo(retVal.(*ObjectRef))
 	} else if rType.isArray() && rType != Object|Array {
 		// If return type is an array of convertable java to go types, do the conversion
@@ -1184,7 +1183,7 @@ func (o *ObjectRef) CallNonvirtualMethod(env *Env, className string, methodName 
 		return err
 	}
 
-	if v, ok := dest.(ToGoConverter); ok && (rType & Object == Object || rType & Array == Array) {
+	if v, ok := dest.(ToGoConverter); ok && (rType&Object == Object || rType&Array == Array) {
 		return v.ConvertToGo(retVal.(*ObjectRef))
 	} else if rType.isArray() && rType != Object|Array {
 		// If return type is an array of convertable java to go types, do the conversion
@@ -1286,7 +1285,7 @@ func (j *Env) CallStaticMethod(className string, methodName string, returnType i
 		return err
 	}
 
-	if v, ok := dest.(ToGoConverter); ok && (rType & Object == Object || rType & Array == Array) {
+	if v, ok := dest.(ToGoConverter); ok && (rType&Object == Object || rType&Array == Array) {
 		return v.ConvertToGo(retVal.(*ObjectRef))
 	} else if rType.isArray() && rType != Object|Array {
 		// If return type is an array of convertable java to go types, do the conversion
@@ -1395,7 +1394,6 @@ func (j *Env) callGetFieldID(static bool, class jclass, name, sig string) (jfiel
 	return fid, nil
 }
 
-
 // GetField gets field fieldName in o with specified field type fieldType.
 // Stores value in dest.
 func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}, dest interface{}) error {
@@ -1409,7 +1407,7 @@ func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}, 
 		return err
 	}
 
-	if v, ok := dest.(ToGoConverter); ok && (fType & Object == Object || fType & Array == Array) {
+	if v, ok := dest.(ToGoConverter); ok && (fType&Object == Object || fType&Array == Array) {
 		return v.ConvertToGo(fieldVal.(*ObjectRef))
 	} else if fType.isArray() && fType != Object|Array {
 		// If return type is an array of convertable java to go types, do the conversion
@@ -1541,7 +1539,6 @@ func (o *ObjectRef) SetField(env *Env, fieldName string, value interface{}) erro
 	return nil
 }
 
-
 // GetField gets field fieldName in class className with specified field type fieldType.
 // Stores value in dest.
 func (j *Env) GetStaticField(className string, fieldName string, fieldType interface{}, dest interface{}) error {
@@ -1555,7 +1552,7 @@ func (j *Env) GetStaticField(className string, fieldName string, fieldType inter
 		return err
 	}
 
-	if v, ok := dest.(ToGoConverter); ok && (fType & Object == Object || fType & Array == Array) {
+	if v, ok := dest.(ToGoConverter); ok && (fType&Object == Object || fType&Array == Array) {
 		return v.ConvertToGo(fieldVal.(*ObjectRef))
 	} else if fType.isArray() && fType != Object|Array {
 		// If return type is an array of convertable java to go types, do the conversion

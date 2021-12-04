@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build linux
 // +build linux
 
 package jnigi
@@ -32,8 +33,8 @@ jint dyn_JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
 import "C"
 
 import (
-	"unsafe"
 	"errors"
+	"unsafe"
 )
 
 func jni_GetDefaultJavaVMInitArgs(args unsafe.Pointer) jint {
