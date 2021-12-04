@@ -2,6 +2,21 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+/*
+	JNIGI (Java Native Interface Golang Interface)
+
+	A package to access Java from Golang code.
+
+	All constructor and method call functions convert parameter arguments and return values.
+	Arguments are converted from Go to Java if:
+	  - The type is Go built in type and there is an equivalent Java primitive type.
+	  - The type is a slice of such a Go built in type.
+	  - The type implements the ToJavaConverter interface
+	Return values are converted from Java to Go if:
+	  - The type is a Java primitive type.
+	  - The type is a Java array of a primitive type.
+	  - The type implements the ToGoConverter interface
+*/
 package jnigi
 
 import (
@@ -27,16 +42,19 @@ func fromBool(b bool) jboolean {
 	}
 }
 
+// ObjectRef holds a reference to a Java Object
 type ObjectRef struct {
 	jobject   jobject
 	className string
 	isArray   bool
 }
 
+// WrapJObject wraps a JNI object value in an ObjectRef
 func WrapJObject(jobj uintptr, className string, isArray bool) *ObjectRef {
 	return &ObjectRef{jobject(jobj), className, isArray}
 }
 
+// Return a copy of the receiver with class name set to className
 func (o *ObjectRef) Cast(className string) *ObjectRef {
 	if className == o.className {
 		return o
@@ -45,10 +63,12 @@ func (o *ObjectRef) Cast(className string) *ObjectRef {
 	}
 }
 
+// IsNil is true if ObjectRef has a Nil Java value
 func (o *ObjectRef) IsNil() bool {
 	return o.jobject == 0
 }
 
+// IsInstanceOf returns true if o is an instance of className
 func (o *ObjectRef) IsInstanceOf(env *Env, className string) (bool, error) {
 	class, err := env.callFindClass(className)
 	if err != nil {
@@ -61,6 +81,7 @@ func (o *ObjectRef) jobj() jobject {
 	return o.jobject
 }
 
+// JObject gets JNI object value of o
 func (o *ObjectRef) JObject() jobject {
 	return o.jobj()
 }
@@ -84,26 +105,32 @@ func (f ExceptionHandlerFunc) CatchException(env *Env, exception *ObjectRef) err
 	return f(env, exception)
 }
 
+// Env holds a JNIEnv value. Methods in this package often require an *Env pointer to specify
+// the JNI Env to run in, so it might be good to store the Env as a package variable.
 type Env struct {
 	jniEnv           unsafe.Pointer
 	preCalcSig       string
-	noReturnConvert  bool
 	classCache       map[string]jclass
 	ExceptionHandler ExceptionHandler
 }
 
+// WrapEnv wraps an JNI Env value in an Env
 func WrapEnv(envPtr unsafe.Pointer) *Env {
 	return &Env{jniEnv: envPtr, classCache: make(map[string]jclass)}
 }
 
+// JVM holds a JavaVM value, you only need one of these in your app.
 type JVM struct {
 	javaVM unsafe.Pointer
 }
 
+// JVMInitArgs holds a JavaVMInitArgs value
 type JVMInitArgs struct {
 	javaVMInitArgs unsafe.Pointer
 }
 
+// CreateJVM calls JNI CreateJavaVM and returns references to the JVM and the initial environment.
+// Use NewJVMInitArgs to create jvmInitArgs.
 func CreateJVM(jvmInitArgs *JVMInitArgs) (*JVM, *Env, error) {
 	runtime.LockOSThread()
 
@@ -121,6 +148,7 @@ func CreateJVM(jvmInitArgs *JVMInitArgs) (*JVM, *Env, error) {
 	return jvm, env, nil
 }
 
+// AttachCurrentThread calls JNI AttachCurrentThread. runtime.LockOSThread() is called first.
 func (j *JVM) AttachCurrentThread() *Env {
 	runtime.LockOSThread()
 	p := malloc(unsafe.Sizeof((unsafe.Pointer)(nil)))
@@ -134,6 +162,7 @@ func (j *JVM) AttachCurrentThread() *Env {
 	return &Env{jniEnv: *(*unsafe.Pointer)(p), classCache: make(map[string]jclass)}
 }
 
+// DetachCurrentThread calls JNI DetachCurrentThread
 func (j *JVM) DetachCurrentThread() error {
 	if detachCurrentThread(j.javaVM) < 0 {
 		return errors.New("JNIGI: detachCurrentThread error")
@@ -141,6 +170,7 @@ func (j *JVM) DetachCurrentThread() error {
 	return nil
 }
 
+// Destroy calls JNI DestroyJavaVM
 func (j *JVM) Destroy() error {
  	if destroyJavaVM(j.javaVM) < 0 {
  		return errors.New("JNIGI: destroyJavaVM error")
@@ -148,6 +178,7 @@ func (j *JVM) Destroy() error {
  	return nil
 }
 
+// GetJVM Calls JNI GetJavaVM. Calls runtime.LockOSThread() first.
 func (j *Env) GetJVM() (*JVM, error) {
 	runtime.LockOSThread()
 	p := malloc(unsafe.Sizeof((unsafe.Pointer)(nil)))
@@ -198,6 +229,7 @@ func (j *Env) handleException() error {
 	return handler.CatchException(j, ref)
 }
 
+// NewObject calls JNI NewObjectA, className class name of new object, args arguments to constructor.
 func (j *Env) NewObject(className string, args ...interface{}) (*ObjectRef, error) {
 	class, err := j.callFindClass(className)
 	if err != nil {
@@ -283,16 +315,14 @@ func (j *Env) callGetMethodID(static bool, class jclass, name, sig string) (jmet
 	return mid, nil
 }
 
+// PrecalculateSignature sets the signature of the next call to sig, disables automatic signature building.
 func (j *Env) PrecalculateSignature(sig string) {
 	j.preCalcSig = sig
 }
 
-func (j *Env) NoReturnConvert() {
-	j.noReturnConvert = true
-}
-
 const big = 1024 * 1024 * 100
 
+// FromObjectArray converts an Java array of objects objRef in to a slice of *ObjectRef which is returned.
 func (j *Env) FromObjectArray(objRef *ObjectRef) []*ObjectRef {
 	len := int(getArrayLength(j.jniEnv, jarray(objRef.jobject)))
 	// exception check?
@@ -420,6 +450,8 @@ func (j *Env) toGoArray(array jobject, aType Type) (interface{}, error) {
 	}
 }
 
+// ToObjectArray converts slice of ObjectRef objRefs of class name className, to a new Java object
+// array returning a reference to this array.
 func (j *Env) ToObjectArray(objRefs []*ObjectRef, className string) (arrayRef *ObjectRef) {
 	arrayRef = &ObjectRef{className: className, isArray: true}
 	class, err := j.callFindClass(className)
@@ -445,16 +477,20 @@ func (j *Env) ToObjectArray(objRefs []*ObjectRef, className string) (arrayRef *O
 	return
 }
 
+// ByteArray holds a JNI JbyteArray
 type ByteArray struct {
 	arr jbyteArray
 	n int
 }
 
+// NewByteArray calls JNI NewByteArray
 func (j *Env) NewByteArray(n int) *ByteArray {
 	a := newByteArray(j.jniEnv, jsize(n))
 	return &ByteArray{a, n}
 }
 
+// NewByteArrayFromSlice calls JNI NewByteArray and GetCritical, copies src to byte array,
+// calls JNI Release Critical. Returns new byte array.
 func (j *Env) NewByteArrayFromSlice(src []byte) *ByteArray {
 	b := j.NewByteArray(len(src))
 	if len(src) > 0 {
@@ -465,6 +501,7 @@ func (j *Env) NewByteArrayFromSlice(src []byte) *ByteArray {
 	return b
 }
 
+// NewByteArrayFromObject creates new ByteArray and sets it from ObjectRef o.
 func (j *Env) NewByteArrayFromObject(o *ObjectRef) *ByteArray {
 	ba := &ByteArray{}
 	ba.SetObject(o)
@@ -480,6 +517,7 @@ func (b *ByteArray) getType() Type {
 	return Byte | Array
 }
 
+// GetCritical calls JNI GetPrimitiveArrayCritical
 func (b *ByteArray) GetCritical(env *Env) []byte {
 	if b.n == 0 {
 		return nil
@@ -488,6 +526,7 @@ func (b *ByteArray) GetCritical(env *Env) []byte {
 	return (*(*[big]byte)(ptr))[0:b.n]
 }
 
+// GetCritical calls JNI ReleasePrimitiveArrayCritical
 func (b *ByteArray) ReleaseCritical(env *Env, bytes []byte) {
 	if len(bytes) == 0 {
 		return
@@ -496,15 +535,18 @@ func (b *ByteArray) ReleaseCritical(env *Env, bytes []byte) {
 	releasePrimitiveArrayCritical(env.jniEnv, jarray(b.arr), ptr, 0)
 }
 
-//returns jlo
+// GetObject returns byte array as *ObjectRef.
 func (b *ByteArray) GetObject() *ObjectRef {
 	return &ObjectRef{jobject(b.arr), "java/lang/Object", false}
 }
 
+// SetObject sets byte array from o.
 func (b *ByteArray) SetObject(o *ObjectRef) {
 	b.arr = jbyteArray(o.jobject)
 }
 
+// CopyBytes creates a go slice of bytes of same length as byte array, calls GetCritical,
+// copies byte array into go slice, calls ReleaseCritical, returns go slice.
 func (b *ByteArray) CopyBytes(env *Env) []byte {
 	r := make([]byte, b.n)
 	src := b.GetCritical(env)
@@ -620,7 +662,7 @@ func (j *Env) toJavaArray(src interface{}) (jobject, error) {
 			return jobject(array), nil
 		}
 		var ptr unsafe.Pointer
-		if copyToC {		
+		if copyToC {
 			ptr = malloc(unsafe.Sizeof(int32(0)) * uintptr(len(v)))
 			defer free(ptr)
 			data := (*(*[big]int32)(ptr))[:len(v)]
@@ -806,6 +848,7 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 	return
 }
 
+// Type is used to specify return types and field types. Array value can be ORed with primitive type.
 type Type uint32
 
 const (
@@ -1027,6 +1070,7 @@ func (o *ObjectRef) getClass(env *Env) (class jclass, err error) {
 	return
 }
 
+// CallMethod calls method methodName on o with specified return type returnType and arguments args. Stores return value in dest.
 func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface{}, dest interface{}, args ...interface{}) error {
 	rType, rClassName, err := typeOfReturnValue(returnType)
 	if err != nil {
@@ -1127,6 +1171,8 @@ func (o *ObjectRef) genericCallMethod(env *Env, methodName string, rType Type, r
 	return retVal, nil
 }
 
+// CallNonvirtualMethod calls non virtual method methodName on o with specified return type returnType and arguments args.
+// Stores return value in dest.
 func (o *ObjectRef) CallNonvirtualMethod(env *Env, className string, methodName string, returnType interface{}, dest interface{}, args ...interface{}) error {
 	rType, rClassName, err := typeOfReturnValue(returnType)
 	if err != nil {
@@ -1227,6 +1273,8 @@ func (o *ObjectRef) genericCallNonvirtualMethod(env *Env, className string, meth
 	return retVal, nil
 }
 
+// CallStaticMethod calls static method methodName in class className with specified return type returnType and arguments args.
+// Stores return value in dest.
 func (j *Env) CallStaticMethod(className string, methodName string, returnType interface{}, dest interface{}, args ...interface{}) error {
 	rType, rClassName, err := typeOfReturnValue(returnType)
 	if err != nil {
@@ -1348,6 +1396,8 @@ func (j *Env) callGetFieldID(static bool, class jclass, name, sig string) (jfiel
 }
 
 
+// GetField gets field fieldName in o with specified field type fieldType.
+// Stores value in dest.
 func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}, dest interface{}) error {
 	fType, fClassName, err := typeOfReturnValue(fieldType)
 	if err != nil {
@@ -1427,6 +1477,7 @@ func (o *ObjectRef) genericGetField(env *Env, fieldName string, fType Type, fCla
 	return retVal, nil
 }
 
+// SetField sets field fieldName in o to value.
 func (o *ObjectRef) SetField(env *Env, fieldName string, value interface{}) error {
 	class, err := o.getClass(env)
 	if err != nil {
@@ -1491,6 +1542,8 @@ func (o *ObjectRef) SetField(env *Env, fieldName string, value interface{}) erro
 }
 
 
+// GetField gets field fieldName in class className with specified field type fieldType.
+// Stores value in dest.
 func (j *Env) GetStaticField(className string, fieldName string, fieldType interface{}, dest interface{}) error {
 	fType, fClassName, err := typeOfReturnValue(fieldType)
 	if err != nil {
@@ -1570,6 +1623,7 @@ func (j *Env) genericGetStaticField(className string, fieldName string, fType Ty
 	return retVal, nil
 }
 
+// SetField sets field fieldName in class className to value.
 func (j *Env) SetStaticField(className string, fieldName string, value interface{}) error {
 	class, err := j.callFindClass(className)
 	if err != nil {
@@ -1633,6 +1687,8 @@ func (j *Env) SetStaticField(className string, fieldName string, value interface
 	return nil
 }
 
+// RegisterNative calls JNI RegisterNative for class className, method methodName with return type returnType and parameters params,
+// fptr is used as native function.
 func (j *Env) RegisterNative(className, methodName string, returnType interface{}, params []interface{}, fptr interface{}) error {
 	class, err := j.callFindClass(className)
 	if err != nil {
@@ -1671,21 +1727,25 @@ func (j *Env) RegisterNative(className, methodName string, returnType interface{
 	return nil
 }
 
+// NewGlobalRef creates a new object reference to o in Env j.
 func (j *Env) NewGlobalRef(o *ObjectRef) *ObjectRef {
 	g := newGlobalRef(j.jniEnv, o.jobject)
 	return &ObjectRef{g, o.className, o.isArray}
 }
 
+// DeleteGlobalRef deletes global object reference o.
 func (j *Env) DeleteGlobalRef(o *ObjectRef) {
 	deleteGlobalRef(j.jniEnv, o.jobject)
 	o.jobject = 0
 }
 
+// DeleteLocalRef deletes object reference o in Env j.
 func (j *Env) DeleteLocalRef(o *ObjectRef) {
 	deleteLocalRef(j.jniEnv, o.jobject)
 	o.jobject = 0
 }
 
+// EnsureLocalCapacity calls JNI EnsureLocalCapacity on Env j
 func (j *Env) EnsureLocalCapacity(capacity int32) error {
 	success := ensureLocalCapacity(j.jniEnv, jint(capacity)) == 0
 	if j.exceptionCheck() {
@@ -1697,6 +1757,7 @@ func (j *Env) EnsureLocalCapacity(capacity int32) error {
 	return nil
 }
 
+// PushLocalFrame calls JNI PushLocalFrame on Env j
 func (j *Env) PushLocalFrame(capacity int32) error {
 	success := pushLocalFrame(j.jniEnv, jint(capacity)) == 0
 	if j.exceptionCheck() {
@@ -1708,6 +1769,7 @@ func (j *Env) PushLocalFrame(capacity int32) error {
 	return nil
 }
 
+// PopLocalFrame calls JNI popLocalFrame on Env j
 func (j *Env) PopLocalFrame(result *ObjectRef) *ObjectRef {
 	if result == nil {
 		result = &ObjectRef{}
@@ -1719,7 +1781,7 @@ func (j *Env) PopLocalFrame(result *ObjectRef) *ObjectRef {
 
 var utf8 *ObjectRef
 
-// return global reference to java/lang/String containing "UTF-8"
+// GetUTF8String return global reference to java/lang/String containing "UTF-8"
 func (j *Env) GetUTF8String() *ObjectRef {
 	if utf8 == nil {
 		cStr := cString("UTF-8")
