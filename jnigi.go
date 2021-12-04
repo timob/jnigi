@@ -847,12 +847,13 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 	return
 }
 
+// TypeSpec is implemented by Type, ObjectType and ObjectArrayType.
 type TypeSpec interface {
 	internal()
 }
 
 // Type is used to specify return types and field types. Array value can be ORed with primitive type.
-// Implements TypeSpec.
+// Implements TypeSpec. See package constants for values.
 type Type uint32
 
 const (
