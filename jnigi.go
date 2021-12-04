@@ -204,6 +204,9 @@ func (j *Env) NewObject(className string, args ...interface{}) (*ObjectRef, erro
 		return nil, err
 	}
 
+	if err := replaceConvertedArgs(args); err != nil {
+		return nil, err
+	}
 	var methodSig string
 	if j.preCalcSig != "" {
 		methodSig = j.preCalcSig
@@ -255,7 +258,7 @@ func (j *Env) callFindClass(className string) (jclass, error) {
 	ref := newGlobalRef(j.jniEnv, jobject(class))
 	deleteLocalRef(j.jniEnv, jobject(class))
 	j.classCache[className] = jclass(ref)
-	
+
 	return jclass(ref), nil
 }
 
@@ -694,14 +697,14 @@ func (j *Env) toJavaArray(src interface{}) (jobject, error) {
 			ptr = malloc(unsafe.Sizeof(float32(0)) * uintptr(len(v)))
 			defer free(ptr)
 			data := (*(*[big]float32)(ptr))[:len(v)]
-			copy(data, v)	
+			copy(data, v)
 		} else {
 			ptr = unsafe.Pointer(&v[0])
 		}
 		setFloatArrayRegion(j.jniEnv, array, jsize(0), jsize(len(v)), ptr)
 		if j.exceptionCheck() {
 			return 0, j.handleException()
-		}		
+		}
 		return jobject(array), nil
 	case []float64:
 		array := newDoubleArray(j.jniEnv, jsize(len(v)))
@@ -723,7 +726,7 @@ func (j *Env) toJavaArray(src interface{}) (jobject, error) {
 		setDoubleArrayRegion(j.jniEnv, array, jsize(0), jsize(len(v)), ptr)
 		if j.exceptionCheck() {
 			return 0, j.handleException()
-		}		
+		}
 		return jobject(array), nil
 	default:
 		return 0, errors.New("JNIGI unsupported array type")
@@ -742,6 +745,9 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 
 	for i, arg := range args {
 		switch v := arg.(type) {
+		case *convertedArg:
+			argList[i] = uint64(v.ObjectRef.jobject)
+			refs = append(refs, v.ObjectRef.jobject)
 		case jobj:
 			argList[i] = uint64(v.jobj())
 		case bool:
@@ -859,6 +865,9 @@ func typeOfValue(value interface{}) (t Type, className string, err error) {
 		if v.isArray {
 			t = t | Array
 		}
+		className = v.className
+	case *convertedArg:
+		t = Object
 		className = v.className
 	case bool:
 		t = Boolean
@@ -1051,6 +1060,9 @@ func (o *ObjectRef) genericCallMethod(env *Env, methodName string, rType Type, r
 		return nil, err
 	}
 
+	if err := replaceConvertedArgs(args); err != nil {
+		return nil, err
+	}
 	var methodSig string
 	if env.preCalcSig != "" {
 		methodSig = env.preCalcSig
@@ -1148,6 +1160,9 @@ func (o *ObjectRef) genericCallNonvirtualMethod(env *Env, className string, meth
 		return nil, err
 	}
 
+	if err := replaceConvertedArgs(args); err != nil {
+		return nil, err
+	}
 	var methodSig string
 	if env.preCalcSig != "" {
 		methodSig = env.preCalcSig
@@ -1245,6 +1260,9 @@ func (j *Env) genericCallStaticMethod(className string, methodName string, rType
 		return nil, err
 	}
 
+	if err := replaceConvertedArgs(args); err != nil {
+		return nil, err
+	}
 	var methodSig string
 	if j.preCalcSig != "" {
 		methodSig = j.preCalcSig

@@ -86,7 +86,7 @@ func PTestBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(goBytes) != testStr {
-		t.Logf("basic test failed")
+		t.Errorf("basic test failed")
 	}
 
 	// object method, int arg, object arg
@@ -106,7 +106,7 @@ func PTestBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !same {
-		t.Logf("basic test failed")
+		t.Errorf("basic test failed")
 	}
 
 	// call static method
@@ -139,7 +139,7 @@ func PTestBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 	if gotX != 5 {
-		t.Logf("basic test failed")
+		t.Errorf("basic test failed")
 	}
 
 	src := "fromChar"
@@ -156,7 +156,7 @@ func PTestBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(goBytes) != src {
-		t.Logf("basic test failed")
+		t.Errorf("basic test failed")
 	}
 }
 
@@ -234,6 +234,7 @@ func PTestObjectArrays(t *testing.T) {
 type GoString string
 
 func (g *GoString) ConvertToGo(obj *ObjectRef) error {
+	defer env.DeleteLocalRef(obj)
 	var goBytes []byte
 	if err := obj.CallMethod(env, "getBytes", Byte|Array, &goBytes); err != nil {
 		return err
@@ -242,8 +243,13 @@ func (g *GoString) ConvertToGo(obj *ObjectRef) error {
 	return nil
 }
 
+func (g *GoString) ConvertToJava() (obj *ObjectRef, err error) {
+	return env.NewObject("java/lang/String", []byte(string(*g)))
+}
+
 func PTestConvert(t *testing.T) {
-	str, err := env.NewObject("java/lang/String", []byte("test string"))
+	var testString GoString = "test string"
+	str, err := env.NewObject("java/lang/String", &testString)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +259,7 @@ func PTestConvert(t *testing.T) {
 		t.Fatal(err)
 	}
 	if firstWord != "test" {
-		t.Logf("convert test failed got %s", firstWord)
+		t.Errorf("convert test failed got %s", firstWord)
 	}
 }
 
