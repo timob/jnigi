@@ -920,6 +920,11 @@ func typeOfReturnValue(value interface{}) (t Type, className string, err error) 
 	return typeOfValue(value)
 }
 
+type ClassGetter interface {
+	GetClass() string
+}
+
+
 func typeOfValue(value interface{}) (t Type, className string, err error) {
 	switch v := value.(type) {
 	case Type:
@@ -1101,7 +1106,7 @@ func (o *ObjectRef) getClass(env *Env) (class jclass, err error) {
 }
 
 // CallMethod calls method methodName on o with specified return type returnType and arguments args. Stores return value in dest.
-func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType TypeSpec, dest interface{}, args ...interface{}) error {
+func (o *ObjectRef) CallMethod(env *Env, methodName string, dest interface{}, args ...interface{}) error {
 	rType, rClassName, err := typeOfReturnValue(returnType)
 	if err != nil {
 		return err
