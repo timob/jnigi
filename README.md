@@ -4,6 +4,10 @@ Java Native Interface Go Interface.
 A package to access Java from Go code. Can be used from a Go executable or shared library.
 This allows for Go to initiate the JVM or Java to start a Go runtime respectively.
 
+## v1
+As of 2021-12-05 the master branch will be version 2. Packages that used JNIGI before this should update their go.mod to set v1 as the
+version. Or update their code to be compatible with version 2.
+
 ## Compile
 The `CGO_CFLAGS` needs to be set to add the JNI C header files. The `compilevars.sh` script will do
 this.
