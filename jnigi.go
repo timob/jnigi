@@ -8,6 +8,7 @@
 	A package to access Java from Go code.
 
 	All constructor and method call functions convert parameter arguments and return values.
+
 	Arguments are converted from Go to Java if:
 	  - The type is Go built in type and there is an equivalent Java primitive type.
 	  - The type is a slice of such a Go built in type.
@@ -16,6 +17,19 @@
 	  - The type is a Java primitive type.
 	  - The type is a Java array of a primitive type.
 	  - The type implements the ToGoConverter interface
+
+
+	Go Builtin to/from Java Primitive:
+
+		bool			Boolean
+		byte			Byte
+		int16			Short
+		uint16			Char
+		int				Int (also int32 -> Int)
+		int64			Long
+		float32			Float
+		float64			Double
+
 */
 package jnigi
 
