@@ -1,8 +1,8 @@
 # JNIGI
-Java Native Interface Golang Interface.
+Java Native Interface Go Interface.
 
-A package to access Java from Golang code. Can be used from a Golang executable or shared library.
-This allows for Golang to initiate the JVM or Java to start a Golang runtime respectively.
+A package to access Java from Go code. Can be used from a Go executable or shared library.
+This allows for Go to initiate the JVM or Java to start a Go runtime respectively.
 
 ## Compile
 The `CGO_CFLAGS` needs to be set to add the JNI C header files. The `compilevars.sh` script will do
@@ -19,18 +19,12 @@ On Windows you can use `compilevars.bat` in the same way (but you don't need `so
 Use the `LoadJVMLib(jvmLibPath string) error` function to load the shared library at run time.
 There is a function `AttemptToFindJVMLibPath() string` to help to find the library path.
 
-## Notes
-### Signals
-The JVM calls sigaction, Golang requires that SA_ONSTACK flag be passed.
-Without this Golang will not be able to print the exception information eg. type, stack trace, line number.
-On Linux a solution is using LD_PRELOAD with a library that intercepts sigaction and adds the flag. (Code that does this: https://gist.github.com/timob/5d3032b54ed6ba2dc6de34b245c556c7)
-
 ## Status
-* Has been used in Golang (many versions since 1.6) executable multi threaded applications on Linux / Windows.
+* Has been used in Go (many versions since 1.6) executable multi threaded applications on Linux / Windows.
 * Tests for main functions tests are present.
-* Documentation needed.
 
 ## Changes
+* 2021-12-05 Version 2: New idiomatic API. Converter interfaces. Add docs.
 * 2020-12-09 Add go.mod file, updated import path to tekao.net/jnigi.
 * 2020-08-21 Add ExceptionHandler interface for handling Java exceptions. Add 3 general handlers DescribeExceptionHandler (default), ThrowableToStringExceptionHandler and ThrowableErrorExceptionHandler.
 * 2020-08-11 Add DestroyJavaVM support, JNI_VERSION_1_8 const
@@ -67,20 +61,20 @@ func main() {
         log.Fatal(err)
     }
 
-    v, err := hello.CallMethod(env, "concat", jnigi.ObjectType("java/lang/String"), world)
+    var greeting jnigi.ObjectRef
+    err = hello.CallMethod(env, "concat", jnigi.ObjectType("java/lang/String"), &greeting, world)
     if err != nil {
         log.Fatal(err)
     }
-    greeting := v.(*jnigi.ObjectRef)
 
-    v, err = greeting.CallMethod(env, "getBytes", jnigi.Byte|jnigi.Array)
+    var goGreeting []byte
+    err = greeting.CallMethod(env, "getBytes", jnigi.Byte|jnigi.Array, &goGreeting)
     if err != nil {
         log.Fatal(err)
     }
-    goGreeting := string(v.([]byte))
 
     // Prints "Hello World!"
-    fmt.Printf("%s", goGreeting)
+    fmt.Printf("%s\n", goGreeting)
 
     if err := jvm.Destroy(); err != nil {
         log.Fatal(err)
