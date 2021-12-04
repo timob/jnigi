@@ -5,7 +5,7 @@ A package to access Java from Golang code. Can be used from a Golang executable 
 This allows for Golang to initiate the JVM or Java to start a Golang runtime respectively.
 
 ## Version 2
-Work on version to is in the `jnigi2` branch.
+Work on version 2 is in the `jnigi2` branch.
 
 ## Compile
 The `CGO_CFLAGS` needs to be set to add the JNI C header files. The `compilevars.sh` script will do
