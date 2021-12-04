@@ -774,7 +774,7 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 				err = arrayErr
 			}
 		default:
-			err = fmt.Errorf("JNIGI: argument not a valid value %t (%v)", args[i], args[i])
+			err = fmt.Errorf("JNIGI: argument not a valid value %T (%v)", args[i], args[i])
 		}
 
 		if err != nil {
@@ -998,11 +998,11 @@ func (o *ObjectRef) getClass(env *Env) (class jclass, err error) {
 			return 0, errors.New("unexpected error getting object class name")
 		}
 		defer env.DeleteLocalRef(strObj)
-		b , err := strObj.CallMethod(env, "getBytes", Byte | Array, env.GetUTF8String())
-		if err != nil {
+		var b []byte
+		if err := strObj.CallMethod(env, "getBytes", Byte | Array, &b, env.GetUTF8String()); err != nil {
 			return 0, err
 		}
-		gotClass := string(b.([]byte))
+		gotClass := string(b)
 
 		// note uses . for class name separator
 		if gotClass != "java.lang.Object" {
@@ -1018,13 +1018,41 @@ func (o *ObjectRef) getClass(env *Env) (class jclass, err error) {
 	return
 }
 
-func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface{}, args ...interface{}) (interface{}, error) {
-	class, err := o.getClass(env)
-	if err != nil {
-		return nil, err
-	}
+func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface{}, dest interface{}, args ...interface{}) error {
+	// Is it worth having env.noReturnConvert still? If we add CallObjectMethod probably not.
+	noReturnConvert := env.noReturnConvert
+	env.noReturnConvert = false
 
 	rType, rClassName, err := typeOfReturnValue(returnType)
+	if err != nil {
+		return err
+	}
+
+	// If return type is an array of convertable java to go types, do the conversion
+	if rType.isArray() && rType != Object|Array && !noReturnConvert {
+		toConvert, err := o.genericCallMethod(env, methodName, rType, rClassName, args...)
+		if err != nil {
+			return err
+		}
+
+		converted, err := env.toGoArray(toConvert.(*ObjectRef).jobject, rType)
+		deleteLocalRef(env.jniEnv, toConvert.(*ObjectRef).jobject)
+		if err != nil {
+			return err
+		}
+
+		return assignDest(converted, dest)
+	} else {
+		retVal, err := o.genericCallMethod(env, methodName, rType, rClassName, args...)
+		if err != nil {
+			return err
+		}
+		return assignDest(retVal, dest)
+	}
+}
+
+func (o *ObjectRef) genericCallMethod(env *Env, methodName string, rType Type, rClassName string, args ...interface{}) (interface{}, error) {
+	class, err := o.getClass(env)
 	if err != nil {
 		return nil, err
 	}
@@ -1058,7 +1086,6 @@ func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface
 		}
 	}()
 
-	var arrayToConvert jobject
 	var retVal interface{}
 
 	switch {
@@ -1082,39 +1109,53 @@ func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface
 		retVal = float64(callDoubleMethodA(env.jniEnv, o.jobject, mid, jniArgs))
 	case rType == Object || rType.isArray():
 		obj := callObjectMethodA(env.jniEnv, o.jobject, mid, jniArgs)
-		if rType == Object || rType == Object|Array || env.noReturnConvert {
-			retVal = &ObjectRef{obj, rClassName, rType.isArray()}
-		} else {
-			arrayToConvert = obj
-			refs = append(refs, obj)
-		}
+		retVal = &ObjectRef{obj, rClassName, rType.isArray()}
 	default:
 		return nil, errors.New("JNIGI unknown return type")
 	}
-
-	env.noReturnConvert = false
 
 	if env.exceptionCheck() {
 		return nil, env.handleException()
 	}
 
-	if arrayToConvert != 0 {
-		retVal, err = env.toGoArray(arrayToConvert, rType)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return retVal, nil
 }
 
-func (o *ObjectRef) CallNonvirtualMethod(env *Env, className string, methodName string, returnType interface{}, args ...interface{}) (interface{}, error) {
-	class, err := env.callFindClass(className)
-	if err != nil {
-		return nil, err
-	}
+func (o *ObjectRef) CallNonvirtualMethod(env *Env, className string, methodName string, returnType interface{}, dest interface{}, args ...interface{}) error {
+	// Is it worth having env.noReturnConvert still? If we add CallObjectMethod probably not.
+	noReturnConvert := env.noReturnConvert
+	env.noReturnConvert = false
 
 	rType, rClassName, err := typeOfReturnValue(returnType)
+	if err != nil {
+		return err
+	}
+
+	// If return type is an array of convertable java to go types, do the conversion
+	if rType.isArray() && rType != Object|Array && !noReturnConvert {
+		toConvert, err := o.genericCallNonvirtualMethod(env, className, methodName, rType, rClassName, args...)
+		if err != nil {
+			return err
+		}
+
+		converted, err := env.toGoArray(toConvert.(*ObjectRef).jobject, rType)
+		deleteLocalRef(env.jniEnv, toConvert.(*ObjectRef).jobject)
+		if err != nil {
+			return err
+		}
+
+		return assignDest(converted, dest)
+	} else {
+		retVal, err := o.genericCallNonvirtualMethod(env, className, methodName, rType, rClassName, args...)
+		if err != nil {
+			return err
+		}
+		return assignDest(retVal, dest)
+	}
+}
+
+func (o *ObjectRef) genericCallNonvirtualMethod(env *Env, className string, methodName string, rType Type, rClassName string, args ...interface{}) (interface{}, error) {
+	class, err := env.callFindClass(className)
 	if err != nil {
 		return nil, err
 	}
@@ -1148,7 +1189,6 @@ func (o *ObjectRef) CallNonvirtualMethod(env *Env, className string, methodName 
 		}
 	}()
 
-	var arrayToConvert jobject
 	var retVal interface{}
 
 	switch {
@@ -1172,39 +1212,53 @@ func (o *ObjectRef) CallNonvirtualMethod(env *Env, className string, methodName 
 		retVal = float64(callNonvirtualDoubleMethodA(env.jniEnv, o.jobject, class, mid, jniArgs))
 	case rType == Object || rType.isArray():
 		obj := callNonvirtualObjectMethodA(env.jniEnv, o.jobject, class, mid, jniArgs)
-		if rType == Object || rType == Object|Array || env.noReturnConvert {
-			retVal = &ObjectRef{obj, rClassName, rType.isArray()}
-		} else {
-			arrayToConvert = obj
-			refs = append(refs, obj)
-		}
+		retVal = &ObjectRef{obj, rClassName, rType.isArray()}
 	default:
 		return nil, errors.New("JNIGI unknown return type")
 	}
-
-	env.noReturnConvert = false
 
 	if env.exceptionCheck() {
 		return nil, env.handleException()
 	}
 
-	if arrayToConvert != 0 {
-		retVal, err = env.toGoArray(arrayToConvert, rType)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return retVal, nil
 }
 
-func (j *Env) CallStaticMethod(className string, methodName string, returnType interface{}, args ...interface{}) (interface{}, error) {
-	class, err := j.callFindClass(className)
-	if err != nil {
-		return nil, err
-	}
+func (j *Env) CallStaticMethod(className string, methodName string, returnType interface{}, dest interface{}, args ...interface{}) error {
+	// Is it worth having env.noReturnConvert still? If we add CallObjectMethod probably not.
+	noReturnConvert := j.noReturnConvert
+	j.noReturnConvert = false
 
 	rType, rClassName, err := typeOfReturnValue(returnType)
+	if err != nil {
+		return err
+	}
+
+	// If return type is an array of convertable java to go types, do the conversion
+	if rType.isArray() && rType != Object|Array && !noReturnConvert {
+		toConvert, err := j.genericCallStaticMethod(className, methodName, rType, rClassName, args...)
+		if err != nil {
+			return err
+		}
+
+		converted, err := j.toGoArray(toConvert.(*ObjectRef).jobject, rType)
+		deleteLocalRef(j.jniEnv, toConvert.(*ObjectRef).jobject)
+		if err != nil {
+			return err
+		}
+
+		return assignDest(converted, dest)
+	} else {
+		retVal, err := j.genericCallStaticMethod(className, methodName, rType, rClassName, args...)
+		if err != nil {
+			return err
+		}
+		return assignDest(retVal, dest)
+	}
+}
+
+func (j *Env) genericCallStaticMethod(className string, methodName string, rType Type, rClassName string, args ...interface{}) (interface{}, error) {
+	class, err := j.callFindClass(className)
 	if err != nil {
 		return nil, err
 	}
@@ -1238,7 +1292,6 @@ func (j *Env) CallStaticMethod(className string, methodName string, returnType i
 		}
 	}()
 
-	var arrayToConvert jobject
 	var retVal interface{}
 
 	switch {
@@ -1262,26 +1315,13 @@ func (j *Env) CallStaticMethod(className string, methodName string, returnType i
 		retVal = float64(callStaticDoubleMethodA(j.jniEnv, class, mid, jniArgs))
 	case rType == Object || rType.isArray():
 		obj := callStaticObjectMethodA(j.jniEnv, class, mid, jniArgs)
-		if rType == Object || rType == Object|Array || j.noReturnConvert {
-			retVal = &ObjectRef{obj, rClassName, rType.isArray()}
-		} else {
-			arrayToConvert = obj
-		}
+		retVal = &ObjectRef{obj, rClassName, rType.isArray()}
 	default:
 		return nil, errors.New("JNIGI unknown return type")
 	}
 
-	j.noReturnConvert = false
-
 	if j.exceptionCheck() {
 		return nil, j.handleException()
-	}
-
-	if arrayToConvert != 0 {
-		retVal, err = j.toGoArray(arrayToConvert, rType)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return retVal, nil
@@ -1307,13 +1347,42 @@ func (j *Env) callGetFieldID(static bool, class jclass, name, sig string) (jfiel
 	return fid, nil
 }
 
-func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}) (interface{}, error) {
-	class, err := o.getClass(env)
-	if err != nil {
-		return nil, err
-	}
+
+func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}, dest interface{}) error {
+	// Is it worth having env.noReturnConvert still? If we add CallObjectMethod probably not.
+	noReturnConvert := env.noReturnConvert
+	env.noReturnConvert = false
 
 	fType, fClassName, err := typeOfReturnValue(fieldType)
+	if err != nil {
+		return err
+	}
+
+	// If return type is an array of convertable java to go types, do the conversion
+	if fType.isArray() && fType != Object|Array && !noReturnConvert {
+		toConvert, err := o.genericGetField(env, fieldName, fType, fClassName)
+		if err != nil {
+			return err
+		}
+
+		converted, err := env.toGoArray(toConvert.(*ObjectRef).jobject, fType)
+		deleteLocalRef(env.jniEnv, toConvert.(*ObjectRef).jobject)
+		if err != nil {
+			return err
+		}
+
+		return assignDest(converted, dest)
+	} else {
+		retVal, err := o.genericGetField(env, fieldName, fType, fClassName)
+		if err != nil {
+			return err
+		}
+		return assignDest(retVal, dest)
+	}
+}
+
+func (o *ObjectRef) genericGetField(env *Env, fieldName string, fType Type, fClassName string) (interface{}, error) {
+	class, err := o.getClass(env)
 	if err != nil {
 		return nil, err
 	}
@@ -1331,7 +1400,6 @@ func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}) 
 		return nil, err
 	}
 
-	var arrayToConvert jobject
 	var retVal interface{}
 
 	switch {
@@ -1353,26 +1421,13 @@ func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}) 
 		retVal = float64(getDoubleField(env.jniEnv, o.jobject, fid))
 	case fType == Object || fType.isArray():
 		obj := getObjectField(env.jniEnv, o.jobject, fid)
-		if fType == Object || fType == Object|Array || env.noReturnConvert {
-			retVal = &ObjectRef{obj, fClassName, fType.isArray()}
-		} else {
-			arrayToConvert = obj
-		}
+		retVal = &ObjectRef{obj, fClassName, fType.isArray()}
 	default:
 		return nil, errors.New("JNIGI unknown field type")
 	}
 
-	env.noReturnConvert = false
-
 	if env.exceptionCheck() {
 		return nil, env.handleException()
-	}
-
-	if arrayToConvert != 0 {
-		retVal, err = env.toGoArray(arrayToConvert, fType)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return retVal, nil
@@ -1441,13 +1496,42 @@ func (o *ObjectRef) SetField(env *Env, fieldName string, value interface{}) erro
 	return nil
 }
 
-func (j *Env) GetStaticField(className string, fieldName string, fieldType interface{}) (interface{}, error) {
-	class, err := j.callFindClass(className)
-	if err != nil {
-		return nil, err
-	}
+
+func (j *Env) GetStaticField(className string, fieldName string, fieldType interface{}, dest interface{}) error {
+	// Is it worth having env.noReturnConvert still? If we add CallObjectMethod probably not.
+	noReturnConvert := j.noReturnConvert
+	j.noReturnConvert = false
 
 	fType, fClassName, err := typeOfReturnValue(fieldType)
+	if err != nil {
+		return err
+	}
+
+	// If return type is an array of convertable java to go types, do the conversion
+	if fType.isArray() && fType != Object|Array && !noReturnConvert {
+		toConvert, err := j.genericGetStaticField(className, fieldName, fType, fClassName)
+		if err != nil {
+			return err
+		}
+
+		converted, err := j.toGoArray(toConvert.(*ObjectRef).jobject, fType)
+		deleteLocalRef(j.jniEnv, toConvert.(*ObjectRef).jobject)
+		if err != nil {
+			return err
+		}
+
+		return assignDest(converted, dest)
+	} else {
+		retVal, err := j.genericGetStaticField(className, fieldName, fType, fClassName)
+		if err != nil {
+			return err
+		}
+		return assignDest(retVal, dest)
+	}
+}
+
+func (j *Env) genericGetStaticField(className string, fieldName string, fType Type, fClassName string) (interface{}, error) {
+	class, err := j.callFindClass(className)
 	if err != nil {
 		return nil, err
 	}
@@ -1465,7 +1549,6 @@ func (j *Env) GetStaticField(className string, fieldName string, fieldType inter
 		return nil, err
 	}
 
-	var arrayToConvert jobject
 	var retVal interface{}
 
 	switch {
@@ -1487,26 +1570,13 @@ func (j *Env) GetStaticField(className string, fieldName string, fieldType inter
 		retVal = float64(getStaticDoubleField(j.jniEnv, class, fid))
 	case fType == Object || fType.isArray():
 		obj := getStaticObjectField(j.jniEnv, class, fid)
-		if fType == Object || fType == Object|Array || j.noReturnConvert {
-			retVal = &ObjectRef{obj, fClassName, fType.isArray()}
-		} else {
-			arrayToConvert = obj
-		}
+		retVal = &ObjectRef{obj, fClassName, fType.isArray()}
 	default:
 		return nil, errors.New("JNIGI unknown field type")
 	}
 
-	j.noReturnConvert = false
-
 	if j.exceptionCheck() {
 		return nil, j.handleException()
-	}
-
-	if arrayToConvert != 0 {
-		retVal, err = j.toGoArray(arrayToConvert, fType)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return retVal, nil
@@ -1717,24 +1787,24 @@ func stringFromJavaLangString(env *Env, ref *ObjectRef) string {
 		return ""
 	}
 	env.PrecalculateSignature("(Ljava/lang/String;)[B")
-	ret, err := ref.CallMethod(env, "getBytes", Byte|Array, env.GetUTF8String())
+	var ret []byte
+	err := ref.CallMethod(env, "getBytes", Byte|Array, &ret, env.GetUTF8String())
 	if err != nil {
 		return ""
 	}
-	return string(ret.([]byte))
+	return string(ret)
 }
 
 func callStringMethodAndAssign(env *Env, obj *ObjectRef, method string, assign func(s string)) error {
-
 	env.PrecalculateSignature("()Ljava/lang/String;")
-	ret, err := obj.CallMethod(env, method, "java/lang/String")
+	var strref ObjectRef
+	err := obj.CallMethod(env, method, "java/lang/String", &strref)
 	if err != nil {
 		return err
 	}
-	strref := ret.(*ObjectRef)
-	defer env.DeleteLocalRef(strref)
+	defer env.DeleteLocalRef(&strref)
 
-	assign(stringFromJavaLangString(env, strref))
+	assign(stringFromJavaLangString(env, &strref))
 
 	return nil
 }
@@ -1784,21 +1854,23 @@ func NewStackTraceElementFromObject(env *Env, stackTraceElement *ObjectRef) (*St
 	// LineNumber
 	{
 		env.PrecalculateSignature("()I")
-		ret, err := stackTraceElement.CallMethod(env, "getLineNumber", Int)
+		var lineNum int
+		err := stackTraceElement.CallMethod(env, "getLineNumber", Int, &lineNum)
 		if err != nil {
 			return nil, err
 		}
-		out.LineNumber = ret.(int)
+		out.LineNumber = lineNum
 	}
 
 	// IsNativeMethod
 	{
 		env.PrecalculateSignature("()Z")
-		ret, err := stackTraceElement.CallMethod(env, "isNativeMethod", Boolean)
+		var isNative bool
+		err := stackTraceElement.CallMethod(env, "isNativeMethod", Boolean, &isNative)
 		if err != nil {
 			return nil, err
 		}
-		out.IsNativeMethod = ret.(bool)
+		out.IsNativeMethod = isNative
 	}
 
 	return &out, nil
@@ -1861,11 +1933,11 @@ func NewThrowableErrorFromObject(env *Env, throwable *ObjectRef) (*ThrowableErro
 	// StackTrace
 	{
 		env.PrecalculateSignature("()[Ljava/lang/StackTraceElement;")
-		ret, err := throwable.CallMethod(env, "getStackTrace", ObjectArrayType("java/lang/StackTraceElement"))
+		stkTrcArr := new(ObjectRef)
+		err := throwable.CallMethod(env, "getStackTrace", ObjectArrayType("java/lang/StackTraceElement"), stkTrcArr)
 		if err != nil {
 			return out, err
 		}
-		stkTrcArr := ret.(*ObjectRef)
 		defer env.DeleteLocalRef(stkTrcArr)
 
 		if !stkTrcArr.IsNil() {
@@ -1890,11 +1962,11 @@ func NewThrowableErrorFromObject(env *Env, throwable *ObjectRef) (*ThrowableErro
 	// Cause
 	{
 		env.PrecalculateSignature("()Ljava/lang/Throwable;")
-		ret, err := throwable.CallMethod(env, "getCause", "java/lang/Throwable")
+		obj := new(ObjectRef)
+		err := throwable.CallMethod(env, "getCause", "java/lang/Throwable", obj)
 		if err != nil {
 			return out, err
 		}
-		obj := ret.(*ObjectRef)
 		defer env.DeleteLocalRef(obj)
 
 		out.Cause, _ = NewThrowableErrorFromObject(env, obj)
