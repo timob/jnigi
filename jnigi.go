@@ -872,8 +872,11 @@ func (t Type) isArray() bool {
 	return t&Array > 0
 }
 
+// ObjectType is treated as Object Type. It's value is used to specify the class of the object.
+// For example jnigi.ObjectType("java/lang/string").
 type ObjectType string
 
+// ObjectArrayType is treated as Object | Array Type. It's value specify the class of the elements.
 type ObjectArrayType string
 
 type convertedArray interface {
