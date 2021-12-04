@@ -3,9 +3,9 @@
 // license that can be found in the LICENSE file.
 
 /*
-	JNIGI (Java Native Interface Golang Interface)
+	JNIGI (Java Native Interface Go Interface)
 
-	A package to access Java from Golang code.
+	A package to access Java from Go code.
 
 	All constructor and method call functions convert parameter arguments and return values.
 	Arguments are converted from Go to Java if:
