@@ -847,7 +847,12 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 	return
 }
 
+type TypeSpec interface {
+	internal()
+}
+
 // Type is used to specify return types and field types. Array value can be ORed with primitive type.
+// Implements TypeSpec.
 type Type uint32
 
 const (
@@ -872,12 +877,20 @@ func (t Type) isArray() bool {
 	return t&Array > 0
 }
 
+func (t Type) internal() {}
+
 // ObjectType is treated as Object Type. It's value is used to specify the class of the object.
 // For example jnigi.ObjectType("java/lang/string").
+// Implements TypeSpec.
 type ObjectType string
 
+func (o ObjectType) internal() {}
+
 // ObjectArrayType is treated as Object | Array Type. It's value specify the class of the elements.
+// Implements TypeSpec.
 type ObjectArrayType string
+
+func (o ObjectArrayType) internal() {}
 
 type convertedArray interface {
 	getType() Type
@@ -1073,7 +1086,7 @@ func (o *ObjectRef) getClass(env *Env) (class jclass, err error) {
 }
 
 // CallMethod calls method methodName on o with specified return type returnType and arguments args. Stores return value in dest.
-func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface{}, dest interface{}, args ...interface{}) error {
+func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType TypeSpec, dest interface{}, args ...interface{}) error {
 	rType, rClassName, err := typeOfReturnValue(returnType)
 	if err != nil {
 		return err
@@ -1175,7 +1188,7 @@ func (o *ObjectRef) genericCallMethod(env *Env, methodName string, rType Type, r
 
 // CallNonvirtualMethod calls non virtual method methodName on o with specified return type returnType and arguments args.
 // Stores return value in dest.
-func (o *ObjectRef) CallNonvirtualMethod(env *Env, className string, methodName string, returnType interface{}, dest interface{}, args ...interface{}) error {
+func (o *ObjectRef) CallNonvirtualMethod(env *Env, className string, methodName string, returnType TypeSpec, dest interface{}, args ...interface{}) error {
 	rType, rClassName, err := typeOfReturnValue(returnType)
 	if err != nil {
 		return err
@@ -1277,7 +1290,7 @@ func (o *ObjectRef) genericCallNonvirtualMethod(env *Env, className string, meth
 
 // CallStaticMethod calls static method methodName in class className with specified return type returnType and arguments args.
 // Stores return value in dest.
-func (j *Env) CallStaticMethod(className string, methodName string, returnType interface{}, dest interface{}, args ...interface{}) error {
+func (j *Env) CallStaticMethod(className string, methodName string, returnType TypeSpec, dest interface{}, args ...interface{}) error {
 	rType, rClassName, err := typeOfReturnValue(returnType)
 	if err != nil {
 		return err
@@ -1399,7 +1412,7 @@ func (j *Env) callGetFieldID(static bool, class jclass, name, sig string) (jfiel
 
 // GetField gets field fieldName in o with specified field type fieldType.
 // Stores value in dest.
-func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}, dest interface{}) error {
+func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType TypeSpec, dest interface{}) error {
 	fType, fClassName, err := typeOfReturnValue(fieldType)
 	if err != nil {
 		return err
@@ -1544,7 +1557,7 @@ func (o *ObjectRef) SetField(env *Env, fieldName string, value interface{}) erro
 
 // GetField gets field fieldName in class className with specified field type fieldType.
 // Stores value in dest.
-func (j *Env) GetStaticField(className string, fieldName string, fieldType interface{}, dest interface{}) error {
+func (j *Env) GetStaticField(className string, fieldName string, fieldType TypeSpec, dest interface{}) error {
 	fType, fClassName, err := typeOfReturnValue(fieldType)
 	if err != nil {
 		return err
@@ -1689,7 +1702,7 @@ func (j *Env) SetStaticField(className string, fieldName string, value interface
 
 // RegisterNative calls JNI RegisterNative for class className, method methodName with return type returnType and parameters params,
 // fptr is used as native function.
-func (j *Env) RegisterNative(className, methodName string, returnType interface{}, params []interface{}, fptr interface{}) error {
+func (j *Env) RegisterNative(className, methodName string, returnType TypeSpec, params []interface{}, fptr interface{}) error {
 	class, err := j.callFindClass(className)
 	if err != nil {
 		return err
@@ -1848,7 +1861,7 @@ func stringFromJavaLangString(env *Env, ref *ObjectRef) string {
 func callStringMethodAndAssign(env *Env, obj *ObjectRef, method string, assign func(s string)) error {
 	env.PrecalculateSignature("()Ljava/lang/String;")
 	var strref ObjectRef
-	err := obj.CallMethod(env, method, "java/lang/String", &strref)
+	err := obj.CallMethod(env, method, ObjectType("java/lang/String"), &strref)
 	if err != nil {
 		return err
 	}
@@ -2013,7 +2026,7 @@ func NewThrowableErrorFromObject(env *Env, throwable *ObjectRef) (*ThrowableErro
 	{
 		env.PrecalculateSignature("()Ljava/lang/Throwable;")
 		obj := new(ObjectRef)
-		err := throwable.CallMethod(env, "getCause", "java/lang/Throwable", obj)
+		err := throwable.CallMethod(env, "getCause", ObjectType("java/lang/Throwable"), obj)
 		if err != nil {
 			return out, err
 		}

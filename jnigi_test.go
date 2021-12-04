@@ -90,7 +90,7 @@ func PTestBasic(t *testing.T) {
 
 	// object method, int arg, object arg
 	var str2 ObjectRef
-	if err := str.CallMethod(env, "substring", "java/lang/String", &str2, 6); err != nil {
+	if err := str.CallMethod(env, "substring", ObjectType("java/lang/String"), &str2, 6); err != nil {
 		t.Fatal(err)
 	}
 
@@ -109,7 +109,7 @@ func PTestBasic(t *testing.T) {
 
 	// call static method
 	var jvmVer ObjectRef
-	if err := env.CallStaticMethod("java/lang/System", "getProperty", "java/lang/String", &jvmVer, fromGoStr(t, "java.vm.version")); err != nil {
+	if err := env.CallStaticMethod("java/lang/System", "getProperty", ObjectType("java/lang/String"), &jvmVer, fromGoStr(t, "java.vm.version")); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf(toGoStr(t, &jvmVer))
@@ -214,11 +214,11 @@ func PTestObjectArrays(t *testing.T) {
 
 	array := env.ToObjectArray(parts, "java/lang/String")
 
-	if err := array.CallMethod(env, "getClass", "java/lang/Class", &v); err != nil {
+	if err := array.CallMethod(env, "getClass", ObjectType("java/lang/Class"), &v); err != nil {
 		t.Fatal(err)
 	}
 	var jClassName ObjectRef
-	if err := v.CallMethod(env, "getName", "java/lang/String", &jClassName); err != nil {
+	if err := v.CallMethod(env, "getName", ObjectType("java/lang/String"), &jClassName); err != nil {
 		t.Fatal(err)
 	}
 	var className []byte
@@ -252,7 +252,7 @@ func PTestConvert(t *testing.T) {
 	}
 
 	var firstWord GoString
-	if err := str.CallMethod(env, "substring", "java/lang/String", &firstWord, 0, 4); err != nil {
+	if err := str.CallMethod(env, "substring", ObjectType("java/lang/String"), &firstWord, 0, 4); err != nil {
 		t.Fatal(err)
 	}
 	if firstWord != "test" {
@@ -275,7 +275,7 @@ func PTestInstanceOf(t *testing.T) {
 	}
 
 	var obj ObjectRef
-	if err := alist.CallMethod(env, "get", "java/lang/Object", &obj, 0); err != nil {
+	if err := alist.CallMethod(env, "get", ObjectType("java/lang/Object"), &obj, 0); err != nil {
 		t.Fatal(err)
 	}
 
