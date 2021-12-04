@@ -54,6 +54,7 @@ func jni_CreateJavaVM(pvm unsafe.Pointer, penv unsafe.Pointer, args unsafe.Point
 	return jint(C.dyn_JNI_CreateJavaVM((**C.JavaVM)(pvm), (*unsafe.Pointer)(penv), (unsafe.Pointer)(args)))
 }
 
+// LoadJVMLib loads libjvm.dyo as specified in jvmLibPath
 func LoadJVMLib(jvmLibPath string) error {
 	// On MacOS we need to preload libjli.dylib to workaround JDK-7131356
 	// "No Java runtime present, requesting install".

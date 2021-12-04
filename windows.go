@@ -43,6 +43,7 @@ func jni_CreateJavaVM(pvm unsafe.Pointer, penv unsafe.Pointer, args unsafe.Point
 	return jint(C.dyn_JNI_CreateJavaVM((**C.JavaVM)(pvm), (*unsafe.Pointer)(penv), (unsafe.Pointer)(args)))
 }
 
+// LoadJVMLib loads jvm.dll as specified in jvmLibPath
 func LoadJVMLib(jvmLibPath string) error {
 	cs := cString(jvmLibPath)
 	defer free(cs)
