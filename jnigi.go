@@ -63,18 +63,34 @@ type ObjectRef struct {
 	isArray   bool
 }
 
+// NewObjectRef returns new *ObjectRef with Nil JNI object reference and class name set to className.
+func NewObjectRef(className string) *ObjectRef {
+	return &ObjectRef{0, className, false}
+}
+
+// NewObjectArrayRef returns new *ObjectRef with Nil JNI object array reference and class name set to className.
+func NewObjectArrayRef(className string) *ObjectRef {
+	return &ObjectRef{0, className, true}
+}
+
 // WrapJObject wraps a JNI object value in an ObjectRef
 func WrapJObject(jobj uintptr, className string, isArray bool) *ObjectRef {
 	return &ObjectRef{jobject(jobj), className, isArray}
 }
 
-// Return a copy of the receiver with class name set to className
-func (o *ObjectRef) Cast(className string) *ObjectRef {
-	if className == o.className {
-		return o
-	} else {
-		return &ObjectRef{o.jobject, className, o.isArray}
-	}
+// GetClassName returns class name of object reference.
+func (o *ObjectRef) GetClassName() string {
+	return o.className
+}
+
+// IsArray returns true if reference is to object array.
+func (o *ObjectRef) IsArray() bool {
+	return o.isArray
+}
+
+// Cast return a new *CastedObjectRef containing the receiver with casted class name set to className.
+func (o *ObjectRef) Cast(className string) *CastedObjectRef {
+	return &CastedObjectRef{o, className}
 }
 
 // IsNil is true if ObjectRef has a Nil Java value
@@ -102,6 +118,19 @@ func (o *ObjectRef) JObject() jobject {
 
 type jobj interface {
 	jobj() jobject
+}
+
+
+// CastedObjectRef represents an object reference casted to a super class.
+// This is used to create method signatures for generic classes.
+type CastedObjectRef struct {
+	*ObjectRef
+	Cast string
+}
+
+// GetClassName returns class name of the cast.
+func (c *CastedObjectRef) GetClassName() string {
+	return c.Cast
 }
 
 // ExceptionHandler is used to convert a thrown exception (java.lang.Throwable) to a Go error.
@@ -920,10 +949,11 @@ func typeOfReturnValue(value interface{}) (t Type, className string, err error) 
 	return typeOfValue(value)
 }
 
-type ClassGetter interface {
-	GetClass() string
+// ClassInfoGetter is implemented by *ObjectRef, *CastedObjectRef to get type info from values.
+type ClassInfoGetter interface {
+	GetClassName() string
+	IsArray() bool
 }
-
 
 func typeOfValue(value interface{}) (t Type, className string, err error) {
 	switch v := value.(type) {
@@ -938,58 +968,57 @@ func typeOfValue(value interface{}) (t Type, className string, err error) {
 	case ObjectArrayType:
 		t = Object | Array
 		className = string(v)
-	case *ObjectRef:
+
+	// This is implemented by *ObjectRef, *CastedObjectRef, *convertedArg
+	case ClassInfoGetter:
 		t = Object
-		if v.isArray {
+		if v.IsArray() {
 			t = t | Array
 		}
-		className = v.className
-	case *convertedArg:
-		t = Object
-		className = v.className
-	case bool:
+		className = v.GetClassName()
+	case bool, *bool:
 		t = Boolean
-	case byte:
+	case byte, *byte:
 		t = Byte
-	case int16:
+	case int16, *int16:
 		t = Short
-	case uint16:
+	case uint16, *uint16:
 		t = Char
-	case int32:
+	case int32, *int32:
 		t = Int
-	case int:
+	case int, *int:
 		t = Int
-	case int64:
+	case int64, *int64:
 		t = Long
-	case float32:
+	case float32, *float32:
 		t = Float
-	case float64:
+	case float64, *float64:
 		t = Double
-	case []bool:
+	case []bool, *[]bool:
 		t = Boolean | Array
 		className = "java/lang/Object"
-	case []byte:
+	case []byte, *[]byte:
 		t = Byte | Array
 		className = "java/lang/Object"
-	case []uint16:
+	case []uint16, *[]uint16:
 		t = Char | Array
 		className = "java/lang/Object"
-	case []int16:
+	case []int16, *[]int16:
 		t = Short | Array
 		className = "java/lang/Object"
-	case []int32:
+	case []int32, *[]int32:
 		t = Int | Array
 		className = "java/lang/Object"
-	case []int:
+	case []int, *[]int:
 		t = Int | Array
 		className = "java/lang/Object"
-	case []int64:
+	case []int64, *[]int64:
 		t = Long | Array
 		className = "java/lang/Object"
-	case []float32:
+	case []float32, *[]float32:
 		t = Float | Array
 		className = "java/lang/Object"
-	case []float64:
+	case []float64, *[]float64:
 		t = Double | Array
 		className = "java/lang/Object"
 	case convertedArray:
@@ -1105,9 +1134,9 @@ func (o *ObjectRef) getClass(env *Env) (class jclass, err error) {
 	return
 }
 
-// CallMethod calls method methodName on o with specified return type returnType and arguments args. Stores return value in dest.
+// CallMethod calls method methodName on o with arguments args and stores return value in dest.
 func (o *ObjectRef) CallMethod(env *Env, methodName string, dest interface{}, args ...interface{}) error {
-	rType, rClassName, err := typeOfReturnValue(returnType)
+	rType, rClassName, err := typeOfReturnValue(dest)
 	if err != nil {
 		return err
 	}
@@ -1206,10 +1235,9 @@ func (o *ObjectRef) genericCallMethod(env *Env, methodName string, rType Type, r
 	return retVal, nil
 }
 
-// CallNonvirtualMethod calls non virtual method methodName on o with specified return type returnType and arguments args.
-// Stores return value in dest.
-func (o *ObjectRef) CallNonvirtualMethod(env *Env, className string, methodName string, returnType TypeSpec, dest interface{}, args ...interface{}) error {
-	rType, rClassName, err := typeOfReturnValue(returnType)
+// CallNonvirtualMethod calls non virtual method methodName on o with arguments args and stores return value in dest.
+func (o *ObjectRef) CallNonvirtualMethod(env *Env, className string, methodName string, dest interface{}, args ...interface{}) error {
+	rType, rClassName, err := typeOfReturnValue(dest)
 	if err != nil {
 		return err
 	}
@@ -1308,10 +1336,9 @@ func (o *ObjectRef) genericCallNonvirtualMethod(env *Env, className string, meth
 	return retVal, nil
 }
 
-// CallStaticMethod calls static method methodName in class className with specified return type returnType and arguments args.
-// Stores return value in dest.
-func (j *Env) CallStaticMethod(className string, methodName string, returnType TypeSpec, dest interface{}, args ...interface{}) error {
-	rType, rClassName, err := typeOfReturnValue(returnType)
+// CallStaticMethod calls static method methodName in class className with arguments args and stores return value in dest.
+func (j *Env) CallStaticMethod(className string, methodName string, dest interface{}, args ...interface{}) error {
+	rType, rClassName, err := typeOfReturnValue(dest)
 	if err != nil {
 		return err
 	}
@@ -1430,10 +1457,9 @@ func (j *Env) callGetFieldID(static bool, class jclass, name, sig string) (jfiel
 	return fid, nil
 }
 
-// GetField gets field fieldName in o with specified field type fieldType.
-// Stores value in dest.
-func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType TypeSpec, dest interface{}) error {
-	fType, fClassName, err := typeOfReturnValue(fieldType)
+// GetField gets field fieldName in o and stores value in dest.
+func (o *ObjectRef) GetField(env *Env, fieldName string, dest interface{}) error {
+	fType, fClassName, err := typeOfReturnValue(dest)
 	if err != nil {
 		return err
 	}
@@ -1575,10 +1601,9 @@ func (o *ObjectRef) SetField(env *Env, fieldName string, value interface{}) erro
 	return nil
 }
 
-// GetField gets field fieldName in class className with specified field type fieldType.
-// Stores value in dest.
-func (j *Env) GetStaticField(className string, fieldName string, fieldType TypeSpec, dest interface{}) error {
-	fType, fClassName, err := typeOfReturnValue(fieldType)
+// GetField gets field fieldName in class className, stores value in dest.
+func (j *Env) GetStaticField(className string, fieldName string, dest interface{}) error {
+	fType, fClassName, err := typeOfReturnValue(dest)
 	if err != nil {
 		return err
 	}

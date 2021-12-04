@@ -133,6 +133,9 @@ func assignDest(val interface{}, dest interface{}) error {
 		if dv, ok := dest.(*ObjectRef); ok {
 			*dv = *v
 			assigned = true
+		} else if dv, ok := dest.(*CastedObjectRef); ok {
+			*(dv.ObjectRef) = *v
+			assigned = true
 		}
 	}
 

@@ -25,8 +25,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	greeting := NewObjectRef("java/lang/String")
-	err = hello.CallMethod(env, "concat", &greeting, world)
+	greeting := jnigi.NewObjectRef("java/lang/String")
+	err = hello.CallMethod(env, "concat", greeting, world)
 	if err != nil {
 		log.Fatal(err)
 	}
