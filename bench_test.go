@@ -16,8 +16,9 @@ func BenchmarkSimple(b *testing.B) {
 		}
 	}
 
-	b.ResetTimer()	
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		obj.CallMethod(env, "intValue", Int)
-	}	
+		var dummy int
+		obj.CallMethod(env, "intValue", Int, &dummy)
+	}
 }

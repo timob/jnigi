@@ -25,20 +25,20 @@ func main() {
 		log.Fatal(err)
 	}
 
-	v, err := hello.CallMethod(env, "concat", jnigi.ObjectType("java/lang/String"), world)
+	greeting := jnigi.NewObjectRef("java/lang/String")
+	err = hello.CallMethod(env, "concat", greeting, world)
 	if err != nil {
 		log.Fatal(err)
 	}
-	greeting := v.(*jnigi.ObjectRef)
 
-	v, err = greeting.CallMethod(env, "getBytes", jnigi.Byte|jnigi.Array)
+	var goGreeting []byte
+	err = greeting.CallMethod(env, "getBytes", &goGreeting)
 	if err != nil {
 		log.Fatal(err)
 	}
-	goGreeting := string(v.([]byte))
 
 	// Prints "Hello World!"
-	fmt.Printf("%s", goGreeting)
+	fmt.Printf("%s\n", goGreeting)
 
 	if err := jvm.Destroy(); err != nil {
 		log.Fatal(err)

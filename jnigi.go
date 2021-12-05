@@ -2,14 +2,43 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+/*
+	JNIGI (Java Native Interface Go Interface)
+
+	A package to access Java from Go code.
+
+	All constructor and method call functions convert parameter arguments and return values.
+
+	Arguments are converted from Go to Java if:
+	  - The type is Go built in type and there is an equivalent Java primitive type.
+	  - The type is a slice of such a Go built in type.
+	  - The type implements the ToJavaConverter interface
+	Return values are converted from Java to Go if:
+	  - The type is a Java primitive type.
+	  - The type is a Java array of a primitive type.
+	  - The type implements the ToGoConverter interface
+
+
+	Go Builtin to/from Java Primitive:
+
+		bool			Boolean
+		byte			Byte
+		int16			Short
+		uint16			Char
+		int				Int (also int32 -> Int)
+		int64			Long
+		float32			Float
+		float64			Double
+
+*/
 package jnigi
 
 import (
 	"errors"
 	"fmt"
 	"runtime"
-	"unsafe"
 	"strings"
+	"unsafe"
 )
 
 // copy arguments in to C memory before passing to jni functions
@@ -27,28 +56,49 @@ func fromBool(b bool) jboolean {
 	}
 }
 
+// ObjectRef holds a reference to a Java Object
 type ObjectRef struct {
 	jobject   jobject
 	className string
 	isArray   bool
 }
 
+// NewObjectRef returns new *ObjectRef with Nil JNI object reference and class name set to className.
+func NewObjectRef(className string) *ObjectRef {
+	return &ObjectRef{0, className, false}
+}
+
+// NewObjectArrayRef returns new *ObjectRef with Nil JNI object array reference and class name set to className.
+func NewObjectArrayRef(className string) *ObjectRef {
+	return &ObjectRef{0, className, true}
+}
+
+// WrapJObject wraps a JNI object value in an ObjectRef
 func WrapJObject(jobj uintptr, className string, isArray bool) *ObjectRef {
 	return &ObjectRef{jobject(jobj), className, isArray}
 }
 
-func (o *ObjectRef) Cast(className string) *ObjectRef {
-	if className == o.className {
-		return o
-	} else {
-		return &ObjectRef{o.jobject, className, o.isArray}
-	}
+// GetClassName returns class name of object reference.
+func (o *ObjectRef) GetClassName() string {
+	return o.className
 }
 
+// IsArray returns true if reference is to object array.
+func (o *ObjectRef) IsArray() bool {
+	return o.isArray
+}
+
+// Cast return a new *CastedObjectRef containing the receiver with casted class name set to className.
+func (o *ObjectRef) Cast(className string) *CastedObjectRef {
+	return &CastedObjectRef{o, className}
+}
+
+// IsNil is true if ObjectRef has a Nil Java value
 func (o *ObjectRef) IsNil() bool {
 	return o.jobject == 0
 }
 
+// IsInstanceOf returns true if o is an instance of className
 func (o *ObjectRef) IsInstanceOf(env *Env, className string) (bool, error) {
 	class, err := env.callFindClass(className)
 	if err != nil {
@@ -61,12 +111,26 @@ func (o *ObjectRef) jobj() jobject {
 	return o.jobject
 }
 
+// JObject gets JNI object value of o
 func (o *ObjectRef) JObject() jobject {
 	return o.jobj()
 }
 
 type jobj interface {
 	jobj() jobject
+}
+
+
+// CastedObjectRef represents an object reference casted to a super class.
+// This is used to create method signatures for generic classes.
+type CastedObjectRef struct {
+	*ObjectRef
+	Cast string
+}
+
+// GetClassName returns class name of the cast.
+func (c *CastedObjectRef) GetClassName() string {
+	return c.Cast
 }
 
 // ExceptionHandler is used to convert a thrown exception (java.lang.Throwable) to a Go error.
@@ -84,26 +148,32 @@ func (f ExceptionHandlerFunc) CatchException(env *Env, exception *ObjectRef) err
 	return f(env, exception)
 }
 
+// Env holds a JNIEnv value. Methods in this package often require an *Env pointer to specify
+// the JNI Env to run in, so it might be good to store the Env as a package variable.
 type Env struct {
 	jniEnv           unsafe.Pointer
 	preCalcSig       string
-	noReturnConvert  bool
 	classCache       map[string]jclass
 	ExceptionHandler ExceptionHandler
 }
 
+// WrapEnv wraps an JNI Env value in an Env
 func WrapEnv(envPtr unsafe.Pointer) *Env {
 	return &Env{jniEnv: envPtr, classCache: make(map[string]jclass)}
 }
 
+// JVM holds a JavaVM value, you only need one of these in your app.
 type JVM struct {
 	javaVM unsafe.Pointer
 }
 
+// JVMInitArgs holds a JavaVMInitArgs value
 type JVMInitArgs struct {
 	javaVMInitArgs unsafe.Pointer
 }
 
+// CreateJVM calls JNI CreateJavaVM and returns references to the JVM and the initial environment.
+// Use NewJVMInitArgs to create jvmInitArgs.
 func CreateJVM(jvmInitArgs *JVMInitArgs) (*JVM, *Env, error) {
 	runtime.LockOSThread()
 
@@ -121,6 +191,7 @@ func CreateJVM(jvmInitArgs *JVMInitArgs) (*JVM, *Env, error) {
 	return jvm, env, nil
 }
 
+// AttachCurrentThread calls JNI AttachCurrentThread. runtime.LockOSThread() is called first.
 func (j *JVM) AttachCurrentThread() *Env {
 	runtime.LockOSThread()
 	p := malloc(unsafe.Sizeof((unsafe.Pointer)(nil)))
@@ -134,6 +205,7 @@ func (j *JVM) AttachCurrentThread() *Env {
 	return &Env{jniEnv: *(*unsafe.Pointer)(p), classCache: make(map[string]jclass)}
 }
 
+// DetachCurrentThread calls JNI DetachCurrentThread
 func (j *JVM) DetachCurrentThread() error {
 	if detachCurrentThread(j.javaVM) < 0 {
 		return errors.New("JNIGI: detachCurrentThread error")
@@ -141,13 +213,15 @@ func (j *JVM) DetachCurrentThread() error {
 	return nil
 }
 
+// Destroy calls JNI DestroyJavaVM
 func (j *JVM) Destroy() error {
- 	if destroyJavaVM(j.javaVM) < 0 {
- 		return errors.New("JNIGI: destroyJavaVM error")
- 	}
- 	return nil
+	if destroyJavaVM(j.javaVM) < 0 {
+		return errors.New("JNIGI: destroyJavaVM error")
+	}
+	return nil
 }
 
+// GetJVM Calls JNI GetJavaVM. Calls runtime.LockOSThread() first.
 func (j *Env) GetJVM() (*JVM, error) {
 	runtime.LockOSThread()
 	p := malloc(unsafe.Sizeof((unsafe.Pointer)(nil)))
@@ -198,12 +272,16 @@ func (j *Env) handleException() error {
 	return handler.CatchException(j, ref)
 }
 
+// NewObject calls JNI NewObjectA, className class name of new object, args arguments to constructor.
 func (j *Env) NewObject(className string, args ...interface{}) (*ObjectRef, error) {
 	class, err := j.callFindClass(className)
 	if err != nil {
 		return nil, err
 	}
 
+	if err := replaceConvertedArgs(args); err != nil {
+		return nil, err
+	}
 	var methodSig string
 	if j.preCalcSig != "" {
 		methodSig = j.preCalcSig
@@ -241,7 +319,6 @@ func (j *Env) NewObject(className string, args ...interface{}) (*ObjectRef, erro
 	return &ObjectRef{obj, className, false}, nil
 }
 
-
 func (j *Env) callFindClass(className string) (jclass, error) {
 	if v, ok := j.classCache[className]; ok {
 		return v, nil
@@ -255,7 +332,7 @@ func (j *Env) callFindClass(className string) (jclass, error) {
 	ref := newGlobalRef(j.jniEnv, jobject(class))
 	deleteLocalRef(j.jniEnv, jobject(class))
 	j.classCache[className] = jclass(ref)
-	
+
 	return jclass(ref), nil
 }
 
@@ -280,16 +357,14 @@ func (j *Env) callGetMethodID(static bool, class jclass, name, sig string) (jmet
 	return mid, nil
 }
 
+// PrecalculateSignature sets the signature of the next call to sig, disables automatic signature building.
 func (j *Env) PrecalculateSignature(sig string) {
 	j.preCalcSig = sig
 }
 
-func (j *Env) NoReturnConvert() {
-	j.noReturnConvert = true
-}
-
 const big = 1024 * 1024 * 100
 
+// FromObjectArray converts an Java array of objects objRef in to a slice of *ObjectRef which is returned.
 func (j *Env) FromObjectArray(objRef *ObjectRef) []*ObjectRef {
 	len := int(getArrayLength(j.jniEnv, jarray(objRef.jobject)))
 	// exception check?
@@ -417,6 +492,8 @@ func (j *Env) toGoArray(array jobject, aType Type) (interface{}, error) {
 	}
 }
 
+// ToObjectArray converts slice of ObjectRef objRefs of class name className, to a new Java object
+// array returning a reference to this array.
 func (j *Env) ToObjectArray(objRefs []*ObjectRef, className string) (arrayRef *ObjectRef) {
 	arrayRef = &ObjectRef{className: className, isArray: true}
 	class, err := j.callFindClass(className)
@@ -442,16 +519,20 @@ func (j *Env) ToObjectArray(objRefs []*ObjectRef, className string) (arrayRef *O
 	return
 }
 
+// ByteArray holds a JNI JbyteArray
 type ByteArray struct {
 	arr jbyteArray
-	n int
+	n   int
 }
 
+// NewByteArray calls JNI NewByteArray
 func (j *Env) NewByteArray(n int) *ByteArray {
 	a := newByteArray(j.jniEnv, jsize(n))
 	return &ByteArray{a, n}
 }
 
+// NewByteArrayFromSlice calls JNI NewByteArray and GetCritical, copies src to byte array,
+// calls JNI Release Critical. Returns new byte array.
 func (j *Env) NewByteArrayFromSlice(src []byte) *ByteArray {
 	b := j.NewByteArray(len(src))
 	if len(src) > 0 {
@@ -462,6 +543,7 @@ func (j *Env) NewByteArrayFromSlice(src []byte) *ByteArray {
 	return b
 }
 
+// NewByteArrayFromObject creates new ByteArray and sets it from ObjectRef o.
 func (j *Env) NewByteArrayFromObject(o *ObjectRef) *ByteArray {
 	ba := &ByteArray{}
 	ba.SetObject(o)
@@ -477,6 +559,7 @@ func (b *ByteArray) getType() Type {
 	return Byte | Array
 }
 
+// GetCritical calls JNI GetPrimitiveArrayCritical
 func (b *ByteArray) GetCritical(env *Env) []byte {
 	if b.n == 0 {
 		return nil
@@ -485,6 +568,7 @@ func (b *ByteArray) GetCritical(env *Env) []byte {
 	return (*(*[big]byte)(ptr))[0:b.n]
 }
 
+// GetCritical calls JNI ReleasePrimitiveArrayCritical
 func (b *ByteArray) ReleaseCritical(env *Env, bytes []byte) {
 	if len(bytes) == 0 {
 		return
@@ -493,15 +577,18 @@ func (b *ByteArray) ReleaseCritical(env *Env, bytes []byte) {
 	releasePrimitiveArrayCritical(env.jniEnv, jarray(b.arr), ptr, 0)
 }
 
-//returns jlo
+// GetObject returns byte array as *ObjectRef.
 func (b *ByteArray) GetObject() *ObjectRef {
 	return &ObjectRef{jobject(b.arr), "java/lang/Object", false}
 }
 
+// SetObject sets byte array from o.
 func (b *ByteArray) SetObject(o *ObjectRef) {
 	b.arr = jbyteArray(o.jobject)
 }
 
+// CopyBytes creates a go slice of bytes of same length as byte array, calls GetCritical,
+// copies byte array into go slice, calls ReleaseCritical, returns go slice.
 func (b *ByteArray) CopyBytes(env *Env) []byte {
 	r := make([]byte, b.n)
 	src := b.GetCritical(env)
@@ -553,7 +640,7 @@ func (j *Env) toJavaArray(src interface{}) (jobject, error) {
 		var ptr unsafe.Pointer
 		if copyToC {
 			ptr = malloc(uintptr(len(v)))
-		    defer free(ptr)
+			defer free(ptr)
 			data := (*(*[big]byte)(ptr))[:len(v)]
 			copy(data, v)
 		} else {
@@ -617,7 +704,7 @@ func (j *Env) toJavaArray(src interface{}) (jobject, error) {
 			return jobject(array), nil
 		}
 		var ptr unsafe.Pointer
-		if copyToC {		
+		if copyToC {
 			ptr = malloc(unsafe.Sizeof(int32(0)) * uintptr(len(v)))
 			defer free(ptr)
 			data := (*(*[big]int32)(ptr))[:len(v)]
@@ -694,14 +781,14 @@ func (j *Env) toJavaArray(src interface{}) (jobject, error) {
 			ptr = malloc(unsafe.Sizeof(float32(0)) * uintptr(len(v)))
 			defer free(ptr)
 			data := (*(*[big]float32)(ptr))[:len(v)]
-			copy(data, v)	
+			copy(data, v)
 		} else {
 			ptr = unsafe.Pointer(&v[0])
 		}
 		setFloatArrayRegion(j.jniEnv, array, jsize(0), jsize(len(v)), ptr)
 		if j.exceptionCheck() {
 			return 0, j.handleException()
-		}		
+		}
 		return jobject(array), nil
 	case []float64:
 		array := newDoubleArray(j.jniEnv, jsize(len(v)))
@@ -723,7 +810,7 @@ func (j *Env) toJavaArray(src interface{}) (jobject, error) {
 		setDoubleArrayRegion(j.jniEnv, array, jsize(0), jsize(len(v)), ptr)
 		if j.exceptionCheck() {
 			return 0, j.handleException()
-		}		
+		}
 		return jobject(array), nil
 	default:
 		return 0, errors.New("JNIGI unsupported array type")
@@ -742,6 +829,9 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 
 	for i, arg := range args {
 		switch v := arg.(type) {
+		case *convertedArg:
+			argList[i] = uint64(v.ObjectRef.jobject)
+			refs = append(refs, v.ObjectRef.jobject)
 		case jobj:
 			argList[i] = uint64(v.jobj())
 		case bool:
@@ -774,7 +864,7 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 				err = arrayErr
 			}
 		default:
-			err = fmt.Errorf("JNIGI: argument not a valid value %t (%v)", args[i], args[i])
+			err = fmt.Errorf("JNIGI: argument not a valid value %T (%v)", args[i], args[i])
 		}
 
 		if err != nil {
@@ -793,13 +883,20 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 	if copyToC {
 		ptr = malloc(unsafe.Sizeof(uint64(0)) * uintptr(len(args)))
 		data := (*(*[big]uint64)(ptr))[:len(args)]
-		copy(data, argList)	
+		copy(data, argList)
 	} else {
 		ptr = unsafe.Pointer(&argList[0])
 	}
 	return
 }
 
+// TypeSpec is implemented by Type, ObjectType and ObjectArrayType.
+type TypeSpec interface {
+	internal()
+}
+
+// Type is used to specify return types and field types. Array value can be ORed with primitive type.
+// Implements TypeSpec. See package constants for values.
 type Type uint32
 
 const (
@@ -824,9 +921,20 @@ func (t Type) isArray() bool {
 	return t&Array > 0
 }
 
+func (t Type) internal() {}
+
+// ObjectType is treated as Object Type. It's value is used to specify the class of the object.
+// For example jnigi.ObjectType("java/lang/string").
+// Implements TypeSpec.
 type ObjectType string
 
+func (o ObjectType) internal() {}
+
+// ObjectArrayType is treated as Object | Array Type. It's value specify the class of the elements.
+// Implements TypeSpec.
 type ObjectArrayType string
+
+func (o ObjectArrayType) internal() {}
 
 type convertedArray interface {
 	getType() Type
@@ -839,6 +947,17 @@ func typeOfReturnValue(value interface{}) (t Type, className string, err error) 
 		return typeOfValue(ObjectType(v))
 	}
 	return typeOfValue(value)
+}
+
+// ClassInfoGetter is implemented by *ObjectRef, *CastedObjectRef to get type info for object values.
+type ClassInfoGetter interface {
+	GetClassName() string
+	IsArray() bool
+}
+
+// TypeGetter can be implemented to control which primitive type a value is treated as.
+type TypeGetter interface {
+	GetType() Type
 }
 
 func typeOfValue(value interface{}) (t Type, className string, err error) {
@@ -854,55 +973,59 @@ func typeOfValue(value interface{}) (t Type, className string, err error) {
 	case ObjectArrayType:
 		t = Object | Array
 		className = string(v)
-	case *ObjectRef:
+	case TypeGetter:
+		t = v.GetType()
+
+	// This is implemented by *ObjectRef, *CastedObjectRef, *convertedArg
+	case ClassInfoGetter:
 		t = Object
-		if v.isArray {
+		if v.IsArray() {
 			t = t | Array
 		}
-		className = v.className
-	case bool:
+		className = v.GetClassName()
+	case bool, *bool:
 		t = Boolean
-	case byte:
+	case byte, *byte:
 		t = Byte
-	case int16:
+	case int16, *int16:
 		t = Short
-	case uint16:
+	case uint16, *uint16:
 		t = Char
-	case int32:
+	case int32, *int32:
 		t = Int
-	case int:
+	case int, *int:
 		t = Int
-	case int64:
+	case int64, *int64:
 		t = Long
-	case float32:
+	case float32, *float32:
 		t = Float
-	case float64:
+	case float64, *float64:
 		t = Double
-	case []bool:
+	case []bool, *[]bool:
 		t = Boolean | Array
 		className = "java/lang/Object"
-	case []byte:
+	case []byte, *[]byte:
 		t = Byte | Array
 		className = "java/lang/Object"
-	case []uint16:
+	case []uint16, *[]uint16:
 		t = Char | Array
 		className = "java/lang/Object"
-	case []int16:
+	case []int16, *[]int16:
 		t = Short | Array
 		className = "java/lang/Object"
-	case []int32:
+	case []int32, *[]int32:
 		t = Int | Array
 		className = "java/lang/Object"
-	case []int:
+	case []int, *[]int:
 		t = Int | Array
 		className = "java/lang/Object"
-	case []int64:
+	case []int64, *[]int64:
 		t = Long | Array
 		className = "java/lang/Object"
-	case []float32:
+	case []float32, *[]float32:
 		t = Float | Array
 		className = "java/lang/Object"
-	case []float64:
+	case []float64, *[]float64:
 		t = Double | Array
 		className = "java/lang/Object"
 	case convertedArray:
@@ -998,11 +1121,11 @@ func (o *ObjectRef) getClass(env *Env) (class jclass, err error) {
 			return 0, errors.New("unexpected error getting object class name")
 		}
 		defer env.DeleteLocalRef(strObj)
-		b , err := strObj.CallMethod(env, "getBytes", Byte | Array, env.GetUTF8String())
-		if err != nil {
+		var b []byte
+		if err := strObj.CallMethod(env, "getBytes", &b,  env.GetUTF8String()); err != nil {
 			return 0, err
 		}
-		gotClass := string(b.([]byte))
+		gotClass := string(b)
 
 		// note uses . for class name separator
 		if gotClass != "java.lang.Object" {
@@ -1018,17 +1141,45 @@ func (o *ObjectRef) getClass(env *Env) (class jclass, err error) {
 	return
 }
 
-func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface{}, args ...interface{}) (interface{}, error) {
+// CallMethod calls method methodName on o with arguments args and stores return value in dest.
+func (o *ObjectRef) CallMethod(env *Env, methodName string, dest interface{}, args ...interface{}) error {
+	rType, rClassName, err := typeOfReturnValue(dest)
+	if err != nil {
+		return err
+	}
+
+	retVal, err := o.genericCallMethod(env, methodName, rType, rClassName, args...)
+	if err != nil {
+		return err
+	}
+
+	if v, ok := dest.(ToGoConverter); ok && (rType&Object == Object || rType&Array == Array) {
+		return v.ConvertToGo(retVal.(*ObjectRef))
+	} else if rType.isArray() && rType != Object|Array {
+		// If return type is an array of convertable java to go types, do the conversion
+		converted, err := env.toGoArray(retVal.(*ObjectRef).jobject, rType)
+		deleteLocalRef(env.jniEnv, retVal.(*ObjectRef).jobject)
+		if err != nil {
+			return err
+		}
+
+		return assignDest(converted, dest)
+	} else {
+		return assignDest(retVal, dest)
+	}
+
+
+}
+
+func (o *ObjectRef) genericCallMethod(env *Env, methodName string, rType Type, rClassName string, args ...interface{}) (interface{}, error) {
 	class, err := o.getClass(env)
 	if err != nil {
 		return nil, err
 	}
 
-	rType, rClassName, err := typeOfReturnValue(returnType)
-	if err != nil {
+	if err := replaceConvertedArgs(args); err != nil {
 		return nil, err
 	}
-
 	var methodSig string
 	if env.preCalcSig != "" {
 		methodSig = env.preCalcSig
@@ -1058,7 +1209,6 @@ func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface
 		}
 	}()
 
-	var arrayToConvert jobject
 	var retVal interface{}
 
 	switch {
@@ -1082,43 +1232,55 @@ func (o *ObjectRef) CallMethod(env *Env, methodName string, returnType interface
 		retVal = float64(callDoubleMethodA(env.jniEnv, o.jobject, mid, jniArgs))
 	case rType == Object || rType.isArray():
 		obj := callObjectMethodA(env.jniEnv, o.jobject, mid, jniArgs)
-		if rType == Object || rType == Object|Array || env.noReturnConvert {
-			retVal = &ObjectRef{obj, rClassName, rType.isArray()}
-		} else {
-			arrayToConvert = obj
-			refs = append(refs, obj)
-		}
+		retVal = &ObjectRef{obj, rClassName, rType.isArray()}
 	default:
 		return nil, errors.New("JNIGI unknown return type")
 	}
-
-	env.noReturnConvert = false
 
 	if env.exceptionCheck() {
 		return nil, env.handleException()
 	}
 
-	if arrayToConvert != 0 {
-		retVal, err = env.toGoArray(arrayToConvert, rType)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return retVal, nil
 }
 
-func (o *ObjectRef) CallNonvirtualMethod(env *Env, className string, methodName string, returnType interface{}, args ...interface{}) (interface{}, error) {
+// CallNonvirtualMethod calls non virtual method methodName on o with arguments args and stores return value in dest.
+func (o *ObjectRef) CallNonvirtualMethod(env *Env, className string, methodName string, dest interface{}, args ...interface{}) error {
+	rType, rClassName, err := typeOfReturnValue(dest)
+	if err != nil {
+		return err
+	}
+
+	retVal, err := o.genericCallNonvirtualMethod(env, className, methodName, rType, rClassName, args...)
+	if err != nil {
+		return err
+	}
+
+	if v, ok := dest.(ToGoConverter); ok && (rType&Object == Object || rType&Array == Array) {
+		return v.ConvertToGo(retVal.(*ObjectRef))
+	} else if rType.isArray() && rType != Object|Array {
+		// If return type is an array of convertable java to go types, do the conversion
+		converted, err := env.toGoArray(retVal.(*ObjectRef).jobject, rType)
+		deleteLocalRef(env.jniEnv, retVal.(*ObjectRef).jobject)
+		if err != nil {
+			return err
+		}
+
+		return assignDest(converted, dest)
+	} else {
+		return assignDest(retVal, dest)
+	}
+}
+
+func (o *ObjectRef) genericCallNonvirtualMethod(env *Env, className string, methodName string, rType Type, rClassName string, args ...interface{}) (interface{}, error) {
 	class, err := env.callFindClass(className)
 	if err != nil {
 		return nil, err
 	}
 
-	rType, rClassName, err := typeOfReturnValue(returnType)
-	if err != nil {
+	if err := replaceConvertedArgs(args); err != nil {
 		return nil, err
 	}
-
 	var methodSig string
 	if env.preCalcSig != "" {
 		methodSig = env.preCalcSig
@@ -1148,7 +1310,6 @@ func (o *ObjectRef) CallNonvirtualMethod(env *Env, className string, methodName 
 		}
 	}()
 
-	var arrayToConvert jobject
 	var retVal interface{}
 
 	switch {
@@ -1172,43 +1333,55 @@ func (o *ObjectRef) CallNonvirtualMethod(env *Env, className string, methodName 
 		retVal = float64(callNonvirtualDoubleMethodA(env.jniEnv, o.jobject, class, mid, jniArgs))
 	case rType == Object || rType.isArray():
 		obj := callNonvirtualObjectMethodA(env.jniEnv, o.jobject, class, mid, jniArgs)
-		if rType == Object || rType == Object|Array || env.noReturnConvert {
-			retVal = &ObjectRef{obj, rClassName, rType.isArray()}
-		} else {
-			arrayToConvert = obj
-			refs = append(refs, obj)
-		}
+		retVal = &ObjectRef{obj, rClassName, rType.isArray()}
 	default:
 		return nil, errors.New("JNIGI unknown return type")
 	}
-
-	env.noReturnConvert = false
 
 	if env.exceptionCheck() {
 		return nil, env.handleException()
 	}
 
-	if arrayToConvert != 0 {
-		retVal, err = env.toGoArray(arrayToConvert, rType)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return retVal, nil
 }
 
-func (j *Env) CallStaticMethod(className string, methodName string, returnType interface{}, args ...interface{}) (interface{}, error) {
+// CallStaticMethod calls static method methodName in class className with arguments args and stores return value in dest.
+func (j *Env) CallStaticMethod(className string, methodName string, dest interface{}, args ...interface{}) error {
+	rType, rClassName, err := typeOfReturnValue(dest)
+	if err != nil {
+		return err
+	}
+
+	retVal, err := j.genericCallStaticMethod(className, methodName, rType, rClassName, args...)
+	if err != nil {
+		return err
+	}
+
+	if v, ok := dest.(ToGoConverter); ok && (rType&Object == Object || rType&Array == Array) {
+		return v.ConvertToGo(retVal.(*ObjectRef))
+	} else if rType.isArray() && rType != Object|Array {
+		// If return type is an array of convertable java to go types, do the conversion
+		converted, err := j.toGoArray(retVal.(*ObjectRef).jobject, rType)
+		deleteLocalRef(j.jniEnv, retVal.(*ObjectRef).jobject)
+		if err != nil {
+			return err
+		}
+
+		return assignDest(converted, dest)
+	} else {
+		return assignDest(retVal, dest)
+	}
+}
+
+func (j *Env) genericCallStaticMethod(className string, methodName string, rType Type, rClassName string, args ...interface{}) (interface{}, error) {
 	class, err := j.callFindClass(className)
 	if err != nil {
 		return nil, err
 	}
 
-	rType, rClassName, err := typeOfReturnValue(returnType)
-	if err != nil {
+	if err := replaceConvertedArgs(args); err != nil {
 		return nil, err
 	}
-
 	var methodSig string
 	if j.preCalcSig != "" {
 		methodSig = j.preCalcSig
@@ -1238,7 +1411,6 @@ func (j *Env) CallStaticMethod(className string, methodName string, returnType i
 		}
 	}()
 
-	var arrayToConvert jobject
 	var retVal interface{}
 
 	switch {
@@ -1262,26 +1434,13 @@ func (j *Env) CallStaticMethod(className string, methodName string, returnType i
 		retVal = float64(callStaticDoubleMethodA(j.jniEnv, class, mid, jniArgs))
 	case rType == Object || rType.isArray():
 		obj := callStaticObjectMethodA(j.jniEnv, class, mid, jniArgs)
-		if rType == Object || rType == Object|Array || j.noReturnConvert {
-			retVal = &ObjectRef{obj, rClassName, rType.isArray()}
-		} else {
-			arrayToConvert = obj
-		}
+		retVal = &ObjectRef{obj, rClassName, rType.isArray()}
 	default:
 		return nil, errors.New("JNIGI unknown return type")
 	}
 
-	j.noReturnConvert = false
-
 	if j.exceptionCheck() {
 		return nil, j.handleException()
-	}
-
-	if arrayToConvert != 0 {
-		retVal, err = j.toGoArray(arrayToConvert, rType)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return retVal, nil
@@ -1307,13 +1466,36 @@ func (j *Env) callGetFieldID(static bool, class jclass, name, sig string) (jfiel
 	return fid, nil
 }
 
-func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}) (interface{}, error) {
-	class, err := o.getClass(env)
+// GetField gets field fieldName in o and stores value in dest.
+func (o *ObjectRef) GetField(env *Env, fieldName string, dest interface{}) error {
+	fType, fClassName, err := typeOfReturnValue(dest)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	fType, fClassName, err := typeOfReturnValue(fieldType)
+	fieldVal, err := o.genericGetField(env, fieldName, fType, fClassName)
+	if err != nil {
+		return err
+	}
+
+	if v, ok := dest.(ToGoConverter); ok && (fType&Object == Object || fType&Array == Array) {
+		return v.ConvertToGo(fieldVal.(*ObjectRef))
+	} else if fType.isArray() && fType != Object|Array {
+		// If return type is an array of convertable java to go types, do the conversion
+		converted, err := env.toGoArray(fieldVal.(*ObjectRef).jobject, fType)
+		deleteLocalRef(env.jniEnv, fieldVal.(*ObjectRef).jobject)
+		if err != nil {
+			return err
+		}
+
+		return assignDest(converted, dest)
+	} else {
+		return assignDest(fieldVal, dest)
+	}
+}
+
+func (o *ObjectRef) genericGetField(env *Env, fieldName string, fType Type, fClassName string) (interface{}, error) {
+	class, err := o.getClass(env)
 	if err != nil {
 		return nil, err
 	}
@@ -1331,7 +1513,6 @@ func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}) 
 		return nil, err
 	}
 
-	var arrayToConvert jobject
 	var retVal interface{}
 
 	switch {
@@ -1353,31 +1534,19 @@ func (o *ObjectRef) GetField(env *Env, fieldName string, fieldType interface{}) 
 		retVal = float64(getDoubleField(env.jniEnv, o.jobject, fid))
 	case fType == Object || fType.isArray():
 		obj := getObjectField(env.jniEnv, o.jobject, fid)
-		if fType == Object || fType == Object|Array || env.noReturnConvert {
-			retVal = &ObjectRef{obj, fClassName, fType.isArray()}
-		} else {
-			arrayToConvert = obj
-		}
+		retVal = &ObjectRef{obj, fClassName, fType.isArray()}
 	default:
 		return nil, errors.New("JNIGI unknown field type")
 	}
-
-	env.noReturnConvert = false
 
 	if env.exceptionCheck() {
 		return nil, env.handleException()
 	}
 
-	if arrayToConvert != 0 {
-		retVal, err = env.toGoArray(arrayToConvert, fType)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return retVal, nil
 }
 
+// SetField sets field fieldName in o to value.
 func (o *ObjectRef) SetField(env *Env, fieldName string, value interface{}) error {
 	class, err := o.getClass(env)
 	if err != nil {
@@ -1441,13 +1610,36 @@ func (o *ObjectRef) SetField(env *Env, fieldName string, value interface{}) erro
 	return nil
 }
 
-func (j *Env) GetStaticField(className string, fieldName string, fieldType interface{}) (interface{}, error) {
-	class, err := j.callFindClass(className)
+// GetField gets field fieldName in class className, stores value in dest.
+func (j *Env) GetStaticField(className string, fieldName string, dest interface{}) error {
+	fType, fClassName, err := typeOfReturnValue(dest)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	fType, fClassName, err := typeOfReturnValue(fieldType)
+	fieldVal, err := j.genericGetStaticField(className, fieldName, fType, fClassName)
+	if err != nil {
+		return err
+	}
+
+	if v, ok := dest.(ToGoConverter); ok && (fType&Object == Object || fType&Array == Array) {
+		return v.ConvertToGo(fieldVal.(*ObjectRef))
+	} else if fType.isArray() && fType != Object|Array {
+		// If return type is an array of convertable java to go types, do the conversion
+		converted, err := j.toGoArray(fieldVal.(*ObjectRef).jobject, fType)
+		deleteLocalRef(j.jniEnv, fieldVal.(*ObjectRef).jobject)
+		if err != nil {
+			return err
+		}
+
+		return assignDest(converted, dest)
+	} else {
+		return assignDest(fieldVal, dest)
+	}
+}
+
+func (j *Env) genericGetStaticField(className string, fieldName string, fType Type, fClassName string) (interface{}, error) {
+	class, err := j.callFindClass(className)
 	if err != nil {
 		return nil, err
 	}
@@ -1465,7 +1657,6 @@ func (j *Env) GetStaticField(className string, fieldName string, fieldType inter
 		return nil, err
 	}
 
-	var arrayToConvert jobject
 	var retVal interface{}
 
 	switch {
@@ -1487,31 +1678,19 @@ func (j *Env) GetStaticField(className string, fieldName string, fieldType inter
 		retVal = float64(getStaticDoubleField(j.jniEnv, class, fid))
 	case fType == Object || fType.isArray():
 		obj := getStaticObjectField(j.jniEnv, class, fid)
-		if fType == Object || fType == Object|Array || j.noReturnConvert {
-			retVal = &ObjectRef{obj, fClassName, fType.isArray()}
-		} else {
-			arrayToConvert = obj
-		}
+		retVal = &ObjectRef{obj, fClassName, fType.isArray()}
 	default:
 		return nil, errors.New("JNIGI unknown field type")
 	}
-
-	j.noReturnConvert = false
 
 	if j.exceptionCheck() {
 		return nil, j.handleException()
 	}
 
-	if arrayToConvert != 0 {
-		retVal, err = j.toGoArray(arrayToConvert, fType)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return retVal, nil
 }
 
+// SetField sets field fieldName in class className to value.
 func (j *Env) SetStaticField(className string, fieldName string, value interface{}) error {
 	class, err := j.callFindClass(className)
 	if err != nil {
@@ -1575,7 +1754,9 @@ func (j *Env) SetStaticField(className string, fieldName string, value interface
 	return nil
 }
 
-func (j *Env) RegisterNative(className, methodName string, returnType interface{}, params []interface{}, fptr interface{}) error {
+// RegisterNative calls JNI RegisterNative for class className, method methodName with return type returnType and parameters params,
+// fptr is used as native function.
+func (j *Env) RegisterNative(className, methodName string, returnType TypeSpec, params []interface{}, fptr interface{}) error {
 	class, err := j.callFindClass(className)
 	if err != nil {
 		return err
@@ -1613,21 +1794,25 @@ func (j *Env) RegisterNative(className, methodName string, returnType interface{
 	return nil
 }
 
+// NewGlobalRef creates a new object reference to o in Env j.
 func (j *Env) NewGlobalRef(o *ObjectRef) *ObjectRef {
 	g := newGlobalRef(j.jniEnv, o.jobject)
 	return &ObjectRef{g, o.className, o.isArray}
 }
 
+// DeleteGlobalRef deletes global object reference o.
 func (j *Env) DeleteGlobalRef(o *ObjectRef) {
 	deleteGlobalRef(j.jniEnv, o.jobject)
 	o.jobject = 0
 }
 
+// DeleteLocalRef deletes object reference o in Env j.
 func (j *Env) DeleteLocalRef(o *ObjectRef) {
 	deleteLocalRef(j.jniEnv, o.jobject)
 	o.jobject = 0
 }
 
+// EnsureLocalCapacity calls JNI EnsureLocalCapacity on Env j
 func (j *Env) EnsureLocalCapacity(capacity int32) error {
 	success := ensureLocalCapacity(j.jniEnv, jint(capacity)) == 0
 	if j.exceptionCheck() {
@@ -1639,6 +1824,7 @@ func (j *Env) EnsureLocalCapacity(capacity int32) error {
 	return nil
 }
 
+// PushLocalFrame calls JNI PushLocalFrame on Env j
 func (j *Env) PushLocalFrame(capacity int32) error {
 	success := pushLocalFrame(j.jniEnv, jint(capacity)) == 0
 	if j.exceptionCheck() {
@@ -1650,6 +1836,7 @@ func (j *Env) PushLocalFrame(capacity int32) error {
 	return nil
 }
 
+// PopLocalFrame calls JNI popLocalFrame on Env j
 func (j *Env) PopLocalFrame(result *ObjectRef) *ObjectRef {
 	if result == nil {
 		result = &ObjectRef{}
@@ -1661,18 +1848,16 @@ func (j *Env) PopLocalFrame(result *ObjectRef) *ObjectRef {
 
 var utf8 *ObjectRef
 
-// return global reference to java/lang/String containing "UTF-8"
+// GetUTF8String return global reference to java/lang/String containing "UTF-8"
 func (j *Env) GetUTF8String() *ObjectRef {
 	if utf8 == nil {
-		cStr := cString("UTF-8")
-		local := newStringUTF(j.jniEnv, cStr)
-		if local == 0 {
-			panic(j.handleException())
+		str, err := j.NewObject("java/lang/String", []byte("UTF-8"))
+		if err != nil {
+			panic(err)
 		}
-		global := jstring(newGlobalRef(j.jniEnv, jobject(local)))
-		deleteLocalRef(j.jniEnv, jobject(local))
-		free(cStr)
-		utf8 = &ObjectRef{jobject: jobject(global), isArray: false, className: "java/lang/String"}
+		global := j.NewGlobalRef(str)
+		j.DeleteLocalRef(str)
+		utf8 = global
 	}
 
 	return utf8
@@ -1717,21 +1902,21 @@ func stringFromJavaLangString(env *Env, ref *ObjectRef) string {
 		return ""
 	}
 	env.PrecalculateSignature("(Ljava/lang/String;)[B")
-	ret, err := ref.CallMethod(env, "getBytes", Byte|Array, env.GetUTF8String())
+	var ret []byte
+	err := ref.CallMethod(env, "getBytes", &ret, env.GetUTF8String())
 	if err != nil {
 		return ""
 	}
-	return string(ret.([]byte))
+	return string(ret)
 }
 
 func callStringMethodAndAssign(env *Env, obj *ObjectRef, method string, assign func(s string)) error {
-
 	env.PrecalculateSignature("()Ljava/lang/String;")
-	ret, err := obj.CallMethod(env, method, "java/lang/String")
+	strref := NewObjectRef("java/lang/String")
+	err := obj.CallMethod(env, method, strref)
 	if err != nil {
 		return err
 	}
-	strref := ret.(*ObjectRef)
 	defer env.DeleteLocalRef(strref)
 
 	assign(stringFromJavaLangString(env, strref))
@@ -1784,21 +1969,23 @@ func NewStackTraceElementFromObject(env *Env, stackTraceElement *ObjectRef) (*St
 	// LineNumber
 	{
 		env.PrecalculateSignature("()I")
-		ret, err := stackTraceElement.CallMethod(env, "getLineNumber", Int)
+		var lineNum int
+		err := stackTraceElement.CallMethod(env, "getLineNumber", &lineNum)
 		if err != nil {
 			return nil, err
 		}
-		out.LineNumber = ret.(int)
+		out.LineNumber = lineNum
 	}
 
 	// IsNativeMethod
 	{
 		env.PrecalculateSignature("()Z")
-		ret, err := stackTraceElement.CallMethod(env, "isNativeMethod", Boolean)
+		var isNative bool
+		err := stackTraceElement.CallMethod(env, "isNativeMethod", &isNative)
 		if err != nil {
 			return nil, err
 		}
-		out.IsNativeMethod = ret.(bool)
+		out.IsNativeMethod = isNative
 	}
 
 	return &out, nil
@@ -1861,11 +2048,11 @@ func NewThrowableErrorFromObject(env *Env, throwable *ObjectRef) (*ThrowableErro
 	// StackTrace
 	{
 		env.PrecalculateSignature("()[Ljava/lang/StackTraceElement;")
-		ret, err := throwable.CallMethod(env, "getStackTrace", ObjectArrayType("java/lang/StackTraceElement"))
+		stkTrcArr := NewObjectRef("java/lang/StackTraceElement")
+		err := throwable.CallMethod(env, "getStackTrace", stkTrcArr)
 		if err != nil {
 			return out, err
 		}
-		stkTrcArr := ret.(*ObjectRef)
 		defer env.DeleteLocalRef(stkTrcArr)
 
 		if !stkTrcArr.IsNil() {
@@ -1890,11 +2077,11 @@ func NewThrowableErrorFromObject(env *Env, throwable *ObjectRef) (*ThrowableErro
 	// Cause
 	{
 		env.PrecalculateSignature("()Ljava/lang/Throwable;")
-		ret, err := throwable.CallMethod(env, "getCause", "java/lang/Throwable")
+		obj := NewObjectRef("java/lang/Throwable")
+		err := throwable.CallMethod(env, "getCause", obj)
 		if err != nil {
 			return out, err
 		}
-		obj := ret.(*ObjectRef)
 		defer env.DeleteLocalRef(obj)
 
 		out.Cause, _ = NewThrowableErrorFromObject(env, obj)

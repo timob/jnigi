@@ -18,6 +18,7 @@ const jni_abort = C.JNI_ABORT
 
 // These functions deal with initializing C structs
 
+// NewJVMInitArgs builds JNI JavaVMInitArgs using GetDefaultJavaVMInitArgs and parameters.
 func NewJVMInitArgs(ignoreUnrecognizedArgs bool, includeDefaultArgs bool, version int, args []string) *JVMInitArgs {
 	jvmargs := (*C.JavaVMInitArgs)(calloc(unsafe.Sizeof(C.JavaVMInitArgs{}), 1))
 	jvmargs.version = C.jint(version)
