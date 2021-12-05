@@ -13,8 +13,7 @@ type ArrayRef struct {
 }
 
 func NewArrayRef(t Type) *ArrayRef {
-	a := &ArrayRef{}
-	a.Type = t
+	a := &ArrayRef{nil, t}
 	return a
 }
 
@@ -24,7 +23,7 @@ func (a *ArrayRef) ConvertToGo(obj *ObjectRef) error {
 	return nil
 }
 
-func (a *ArrayRef) OverrideType() Type {
+func (a *ArrayRef) GetType() Type {
 	return a.Type
 }
 

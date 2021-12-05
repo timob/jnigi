@@ -65,14 +65,14 @@ func main() {
         log.Fatal(err)
     }
 
-    var greeting jnigi.ObjectRef
-    err = hello.CallMethod(env, "concat", jnigi.ObjectType("java/lang/String"), &greeting, world)
+    greeting := jnigi.NewObjectRef("java/lang/String")
+    err = hello.CallMethod(env, "concat", greeting, world)
     if err != nil {
         log.Fatal(err)
     }
 
     var goGreeting []byte
-    err = greeting.CallMethod(env, "getBytes", jnigi.Byte|jnigi.Array, &goGreeting)
+    err = greeting.CallMethod(env, "getBytes", &goGreeting)
     if err != nil {
         log.Fatal(err)
     }

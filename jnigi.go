@@ -949,15 +949,15 @@ func typeOfReturnValue(value interface{}) (t Type, className string, err error) 
 	return typeOfValue(value)
 }
 
-// ClassInfoGetter is implemented by *ObjectRef, *CastedObjectRef to get type info from values.
+// ClassInfoGetter is implemented by *ObjectRef, *CastedObjectRef to get type info for object values.
 type ClassInfoGetter interface {
 	GetClassName() string
 	IsArray() bool
 }
 
-// TypeOverrider can be implemented by a ToGoConverter specify primitive arrays.
-type TypeOverrider interface {
-	OverrideType() Type
+// TypeGetter can be implemented to control which primitive type a value is treated as.
+type TypeGetter interface {
+	GetType() Type
 }
 
 func typeOfValue(value interface{}) (t Type, className string, err error) {
@@ -973,8 +973,8 @@ func typeOfValue(value interface{}) (t Type, className string, err error) {
 	case ObjectArrayType:
 		t = Object | Array
 		className = string(v)
-	case TypeOverrider:
-		t = v.OverrideType()
+	case TypeGetter:
+		t = v.GetType()
 
 	// This is implemented by *ObjectRef, *CastedObjectRef, *convertedArg
 	case ClassInfoGetter:
