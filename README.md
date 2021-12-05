@@ -8,9 +8,6 @@ This allows for Go to initiate the JVM or Java to start a Go runtime respectivel
 As of 2021-12-05 the master branch will be version 2. Packages that used JNIGI before this should update their go.mod to set v1 as the
 version. Or update their code to be compatible with version 2.
 
-## Version 2
-Work on version 2 is in the `jnigi2` branch.
-
 ## Compile
 The `CGO_CFLAGS` needs to be set to add the JNI C header files. The `compilevars.sh` script will do
 this.
