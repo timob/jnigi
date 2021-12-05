@@ -47,7 +47,7 @@ func PTestInit(t *testing.T) {
 
 func toGoStr(t *testing.T, o *ObjectRef) string {
 	var goBytes []byte
-	if err := o.CallMethod(env, "getBytes", Byte|Array, &goBytes); err != nil {
+	if err := o.CallMethod(env, "getBytes", &goBytes); err != nil {
 		t.Fatal(err)
 	}
 	return string(goBytes)
@@ -69,7 +69,7 @@ func PTestBasic(t *testing.T) {
 	}
 
 	var v int
-	if err := obj.CallMethod(env, "hashCode", Int, &v); err != nil {
+	if err := obj.CallMethod(env, "hashCode", &v); err != nil {
 		t.Fatal(err)
 	}
 
@@ -81,7 +81,7 @@ func PTestBasic(t *testing.T) {
 	}
 
 	var goBytes []byte
-	if err := str.CallMethod(env, "getBytes", Byte|Array, &goBytes, env.GetUTF8String()); err != nil {
+	if err := str.CallMethod(env, "getBytes", &goBytes, env.GetUTF8String()); err != nil {
 		t.Fatal(err)
 	}
 	if string(goBytes) != testStr {
@@ -89,18 +89,19 @@ func PTestBasic(t *testing.T) {
 	}
 
 	// object method, int arg, object arg
-	var str2 ObjectRef
-	if err := str.CallMethod(env, "substring", ObjectType("java/lang/String"), &str2, 6); err != nil {
+	str2 := NewObjectRef("java/lang/String")
+	if err := str.CallMethod(env, "substring", str2, 6); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := str2.CallMethod(env, "getBytes", Byte|Array, nil); err != nil {
+	var dummy []byte
+	if err := str2.CallMethod(env, "getBytes", &dummy); err != nil {
 		t.Fatal(err)
 	}
 
 	env.PrecalculateSignature("(Ljava/lang/String;)Z")
 	var same bool
-	if err := str.CallMethod(env, "endsWith", Boolean, &same, &str2); err != nil {
+	if err := str.CallMethod(env, "endsWith", &same, str2); err != nil {
 		t.Fatal(err)
 	}
 	if !same {
@@ -108,15 +109,15 @@ func PTestBasic(t *testing.T) {
 	}
 
 	// call static method
-	var jvmVer ObjectRef
-	if err := env.CallStaticMethod("java/lang/System", "getProperty", ObjectType("java/lang/String"), &jvmVer, fromGoStr(t, "java.vm.version")); err != nil {
+	jvmVer := NewObjectRef("java/lang/String")
+	if err := env.CallStaticMethod("java/lang/System", "getProperty", jvmVer, fromGoStr(t, "java.vm.version")); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf(toGoStr(t, &jvmVer))
+	t.Logf(toGoStr(t, jvmVer))
 
 	// get static field
 	var calPos int
-	err = env.GetStaticField("java/util/Calendar", "APRIL", Int, &calPos)
+	err = env.GetStaticField("java/util/Calendar", "APRIL", &calPos)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +133,7 @@ func PTestBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 	var gotX int
-	err = pt.GetField(env, "x", Int, &gotX)
+	err = pt.GetField(env, "x", &gotX)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +151,7 @@ func PTestBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := str.CallMethod(env, "getBytes", Byte|Array, &goBytes, env.GetUTF8String()); err != nil {
+	if err := str.CallMethod(env, "getBytes", &goBytes, env.GetUTF8String()); err != nil {
 		t.Fatal(err)
 	}
 	if string(goBytes) != src {
@@ -172,7 +173,7 @@ func PTestAttach(t *testing.T) {
 		t.Logf("%x", nenv.jniEnv)
 
 		var v int
-		if err := gObj.CallMethod(nenv, "hashCode", Int, &v); err != nil {
+		if err := gObj.CallMethod(nenv, "hashCode", &v); err != nil {
 			t.Fatal(err)
 		}
 		t.Logf("%d", v)
@@ -197,16 +198,15 @@ func PTestObjectArrays(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var v ObjectRef
-
-	if err := str.CallMethod(env, "split", ObjectArrayType("java/lang/String"), &v, regex); err != nil {
+	v := NewObjectArrayRef("java/lang/String")
+	if err := str.CallMethod(env, "split", v, regex); err != nil {
 		t.Fatal(err)
 	}
 
-	parts := env.FromObjectArray(&v)
+	parts := env.FromObjectArray(v)
 	for _, p := range parts {
 		var part []byte
-		if err := p.CallMethod(env, "getBytes", Byte|Array, &part); err != nil {
+		if err := p.CallMethod(env, "getBytes", &part); err != nil {
 			t.Fatal(err)
 		}
 		t.Logf("%s", string(part))
@@ -214,15 +214,16 @@ func PTestObjectArrays(t *testing.T) {
 
 	array := env.ToObjectArray(parts, "java/lang/String")
 
-	if err := array.CallMethod(env, "getClass", ObjectType("java/lang/Class"), &v); err != nil {
+	class := NewObjectRef("java/lang/Class")
+	if err := array.CallMethod(env, "getClass", class); err != nil {
 		t.Fatal(err)
 	}
-	var jClassName ObjectRef
-	if err := v.CallMethod(env, "getName", ObjectType("java/lang/String"), &jClassName); err != nil {
+	jClassName := NewObjectRef("java/lang/String")
+	if err := class.CallMethod(env, "getName", jClassName); err != nil {
 		t.Fatal(err)
 	}
 	var className []byte
-	if err := jClassName.CallMethod(env, "getBytes", Byte|Array, &className); err != nil {
+	if err := jClassName.CallMethod(env, "getBytes", &className); err != nil {
 		t.Fatal(err)
 	}
 	t.Logf("%s", string(className))
@@ -233,7 +234,7 @@ type GoString string
 func (g *GoString) ConvertToGo(obj *ObjectRef) error {
 	defer env.DeleteLocalRef(obj)
 	var goBytes []byte
-	if err := obj.CallMethod(env, "getBytes", Byte|Array, &goBytes); err != nil {
+	if err := obj.CallMethod(env, "getBytes", &goBytes); err != nil {
 		return err
 	}
 	*g = GoString(goBytes)
@@ -244,6 +245,14 @@ func (g *GoString) ConvertToJava() (obj *ObjectRef, err error) {
 	return env.NewObject("java/lang/String", []byte(string(*g)))
 }
 
+func (g *GoString) GetClassName() string {
+	return "java/lang/String"
+}
+
+func (g *GoString) IsArray() bool {
+	return false
+}
+
 func PTestConvert(t *testing.T) {
 	var testString GoString = "test string"
 	str, err := env.NewObject("java/lang/String", &testString)
@@ -252,7 +261,7 @@ func PTestConvert(t *testing.T) {
 	}
 
 	var firstWord GoString
-	if err := str.CallMethod(env, "substring", ObjectType("java/lang/String"), &firstWord, 0, 4); err != nil {
+	if err := str.CallMethod(env, "substring", &firstWord, 0, 4); err != nil {
 		t.Fatal(err)
 	}
 	if firstWord != "test" {
@@ -270,12 +279,13 @@ func PTestInstanceOf(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := alist.CallMethod(env, "add", Boolean, nil, str.Cast("java/lang/Object")); err != nil {
+	var dummy bool
+	if err := alist.CallMethod(env, "add", &dummy, str.Cast("java/lang/Object")); err != nil {
 		t.Fatal(err)
 	}
 
-	var obj ObjectRef
-	if err := alist.CallMethod(env, "get", ObjectType("java/lang/Object"), &obj, 0); err != nil {
+	obj := NewObjectRef("java/lang/Object")
+	if err := alist.CallMethod(env, "get", obj, 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -305,8 +315,8 @@ func PTestByteArray(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var arr ArrayRef
-	if err := str.CallMethod(env, "getBytes", Byte|Array, &arr, env.GetUTF8String()); err != nil {
+	arr := NewArrayRef(Byte|Array)
+	if err := str.CallMethod(env, "getBytes", arr, env.GetUTF8String()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -352,7 +362,8 @@ func PTestPushPopLocalFrame(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := obj.CallMethod(env, "hashCode", Int, nil); err != nil {
+	var dummy int
+	if err := obj.CallMethod(env, "hashCode", &dummy); err != nil {
 		t.Fatal(err)
 	}
 
@@ -360,7 +371,7 @@ func PTestPushPopLocalFrame(t *testing.T) {
 	obj = env.PopLocalFrame(obj)
 	t.Logf("Call PopLocalFrame: passed")
 
-	if err := obj.CallMethod(env, "hashCode", Int, nil); err != nil {
+	if err := obj.CallMethod(env, "hashCode", &dummy); err != nil {
 		t.Fatalf("hashCode after PopLocalFrame failed %s", err)
 	}
 
@@ -376,7 +387,7 @@ func PTestPushPopLocalFrame(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := obj.CallMethod(env, "hashCode", Int, nil); err != nil {
+	if err := obj.CallMethod(env, "hashCode", &dummy); err != nil {
 		t.Fatal(err)
 	}
 

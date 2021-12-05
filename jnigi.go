@@ -955,6 +955,11 @@ type ClassInfoGetter interface {
 	IsArray() bool
 }
 
+// TypeOverrider can be implemented by a ToGoConverter specify primitive arrays.
+type TypeOverrider interface {
+	OverrideType() Type
+}
+
 func typeOfValue(value interface{}) (t Type, className string, err error) {
 	switch v := value.(type) {
 	case Type:
@@ -968,6 +973,8 @@ func typeOfValue(value interface{}) (t Type, className string, err error) {
 	case ObjectArrayType:
 		t = Object | Array
 		className = string(v)
+	case TypeOverrider:
+		t = v.OverrideType()
 
 	// This is implemented by *ObjectRef, *CastedObjectRef, *convertedArg
 	case ClassInfoGetter:
@@ -1115,7 +1122,7 @@ func (o *ObjectRef) getClass(env *Env) (class jclass, err error) {
 		}
 		defer env.DeleteLocalRef(strObj)
 		var b []byte
-		if err := strObj.CallMethod(env, "getBytes", Byte|Array, &b, env.GetUTF8String()); err != nil {
+		if err := strObj.CallMethod(env, "getBytes", &b,  env.GetUTF8String()); err != nil {
 			return 0, err
 		}
 		gotClass := string(b)
@@ -1160,6 +1167,8 @@ func (o *ObjectRef) CallMethod(env *Env, methodName string, dest interface{}, ar
 	} else {
 		return assignDest(retVal, dest)
 	}
+
+
 }
 
 func (o *ObjectRef) genericCallMethod(env *Env, methodName string, rType Type, rClassName string, args ...interface{}) (interface{}, error) {
@@ -1842,15 +1851,13 @@ var utf8 *ObjectRef
 // GetUTF8String return global reference to java/lang/String containing "UTF-8"
 func (j *Env) GetUTF8String() *ObjectRef {
 	if utf8 == nil {
-		cStr := cString("UTF-8")
-		local := newStringUTF(j.jniEnv, cStr)
-		if local == 0 {
-			panic(j.handleException())
+		str, err := j.NewObject("java/lang/String", []byte("UTF-8"))
+		if err != nil {
+			panic(err)
 		}
-		global := jstring(newGlobalRef(j.jniEnv, jobject(local)))
-		deleteLocalRef(j.jniEnv, jobject(local))
-		free(cStr)
-		utf8 = &ObjectRef{jobject: jobject(global), isArray: false, className: "java/lang/String"}
+		global := j.NewGlobalRef(str)
+		j.DeleteLocalRef(str)
+		utf8 = global
 	}
 
 	return utf8
@@ -1896,7 +1903,7 @@ func stringFromJavaLangString(env *Env, ref *ObjectRef) string {
 	}
 	env.PrecalculateSignature("(Ljava/lang/String;)[B")
 	var ret []byte
-	err := ref.CallMethod(env, "getBytes", Byte|Array, &ret, env.GetUTF8String())
+	err := ref.CallMethod(env, "getBytes", &ret, env.GetUTF8String())
 	if err != nil {
 		return ""
 	}
@@ -1905,14 +1912,14 @@ func stringFromJavaLangString(env *Env, ref *ObjectRef) string {
 
 func callStringMethodAndAssign(env *Env, obj *ObjectRef, method string, assign func(s string)) error {
 	env.PrecalculateSignature("()Ljava/lang/String;")
-	var strref ObjectRef
-	err := obj.CallMethod(env, method, ObjectType("java/lang/String"), &strref)
+	strref := NewObjectRef("java/lang/String")
+	err := obj.CallMethod(env, method, strref)
 	if err != nil {
 		return err
 	}
-	defer env.DeleteLocalRef(&strref)
+	defer env.DeleteLocalRef(strref)
 
-	assign(stringFromJavaLangString(env, &strref))
+	assign(stringFromJavaLangString(env, strref))
 
 	return nil
 }
@@ -1963,7 +1970,7 @@ func NewStackTraceElementFromObject(env *Env, stackTraceElement *ObjectRef) (*St
 	{
 		env.PrecalculateSignature("()I")
 		var lineNum int
-		err := stackTraceElement.CallMethod(env, "getLineNumber", Int, &lineNum)
+		err := stackTraceElement.CallMethod(env, "getLineNumber", &lineNum)
 		if err != nil {
 			return nil, err
 		}
@@ -1974,7 +1981,7 @@ func NewStackTraceElementFromObject(env *Env, stackTraceElement *ObjectRef) (*St
 	{
 		env.PrecalculateSignature("()Z")
 		var isNative bool
-		err := stackTraceElement.CallMethod(env, "isNativeMethod", Boolean, &isNative)
+		err := stackTraceElement.CallMethod(env, "isNativeMethod", &isNative)
 		if err != nil {
 			return nil, err
 		}
@@ -2041,8 +2048,8 @@ func NewThrowableErrorFromObject(env *Env, throwable *ObjectRef) (*ThrowableErro
 	// StackTrace
 	{
 		env.PrecalculateSignature("()[Ljava/lang/StackTraceElement;")
-		stkTrcArr := new(ObjectRef)
-		err := throwable.CallMethod(env, "getStackTrace", ObjectArrayType("java/lang/StackTraceElement"), stkTrcArr)
+		stkTrcArr := NewObjectRef("java/lang/StackTraceElement")
+		err := throwable.CallMethod(env, "getStackTrace", stkTrcArr)
 		if err != nil {
 			return out, err
 		}
@@ -2070,8 +2077,8 @@ func NewThrowableErrorFromObject(env *Env, throwable *ObjectRef) (*ThrowableErro
 	// Cause
 	{
 		env.PrecalculateSignature("()Ljava/lang/Throwable;")
-		obj := new(ObjectRef)
-		err := throwable.CallMethod(env, "getCause", ObjectType("java/lang/Throwable"), obj)
+		obj := NewObjectRef("java/lang/Throwable")
+		err := throwable.CallMethod(env, "getCause", obj)
 		if err != nil {
 			return out, err
 		}

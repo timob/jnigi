@@ -9,12 +9,23 @@ type ToGoConverter interface {
 // ArrayRef just disables auto conversion of Java arrays to Go slices
 type ArrayRef struct {
 	*ObjectRef
+	Type
+}
+
+func NewArrayRef(t Type) *ArrayRef {
+	a := &ArrayRef{}
+	a.Type = t
+	return a
 }
 
 // Just hold on to the reference to the array jobject
 func (a *ArrayRef) ConvertToGo(obj *ObjectRef) error {
 	a.ObjectRef = obj
 	return nil
+}
+
+func (a *ArrayRef) OverrideType() Type {
+	return a.Type
 }
 
 // Types that can convert to Java Object
