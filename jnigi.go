@@ -36,7 +36,6 @@ package jnigi
 import (
 	"errors"
 	"fmt"
-	"runtime"
 	"strings"
 	"unsafe"
 )
@@ -174,9 +173,8 @@ type JVMInitArgs struct {
 
 // CreateJVM calls JNI CreateJavaVM and returns references to the JVM and the initial environment.
 // Use NewJVMInitArgs to create jvmInitArgs.
+// Must call runtime.LockOSThread() first.
 func CreateJVM(jvmInitArgs *JVMInitArgs) (*JVM, *Env, error) {
-	runtime.LockOSThread()
-
 	p := malloc(unsafe.Sizeof((unsafe.Pointer)(nil)))
 	p2 := malloc(unsafe.Sizeof((unsafe.Pointer)(nil)))
 
@@ -191,9 +189,9 @@ func CreateJVM(jvmInitArgs *JVMInitArgs) (*JVM, *Env, error) {
 	return jvm, env, nil
 }
 
-// AttachCurrentThread calls JNI AttachCurrentThread. runtime.LockOSThread() is called first.
+// AttachCurrentThread calls JNI AttachCurrentThread.
+// Must call runtime.LockOSThread() first.
 func (j *JVM) AttachCurrentThread() *Env {
-	runtime.LockOSThread()
 	p := malloc(unsafe.Sizeof((unsafe.Pointer)(nil)))
 
 	//	p := (**C.JNIEnv)(malloc(unsafe.Sizeof((*C.JNIEnv)(nil))))
@@ -221,9 +219,8 @@ func (j *JVM) Destroy() error {
 	return nil
 }
 
-// GetJVM Calls JNI GetJavaVM. Calls runtime.LockOSThread() first.
+// GetJVM Calls JNI GetJavaVM. Needs to be called on an attached thread.
 func (j *Env) GetJVM() (*JVM, error) {
-	runtime.LockOSThread()
 	p := malloc(unsafe.Sizeof((unsafe.Pointer)(nil)))
 
 	if getJavaVM(j.jniEnv, p) < 0 {

@@ -6,6 +6,7 @@ package jnigi
 
 import (
 	"testing"
+	"runtime"
 )
 
 var env *Env
@@ -34,6 +35,7 @@ func PTestInit(t *testing.T) {
 		t.Log("can use JAVA_HOME environment variable to set JRE root directory")
 		t.Fatal(err)
 	}
+	runtime.LockOSThread()
 	jvm2, e2, err := CreateJVM(NewJVMInitArgs(false, true, DEFAULT_VERSION, []string{"-Xcheck:jni"}))
 	if err != nil {
 		t.Fatal(err)
@@ -169,6 +171,7 @@ func PTestAttach(t *testing.T) {
 	gObj := env.NewGlobalRef(obj)
 
 	go func() {
+		runtime.LockOSThread()
 		nenv := jvm.AttachCurrentThread()
 		t.Logf("%x", nenv.jniEnv)
 
@@ -180,6 +183,7 @@ func PTestAttach(t *testing.T) {
 		if err := jvm.DetachCurrentThread(); err != nil {
 			t.Fatal(err)
 		}
+		runtime.UnlockOSThread()
 
 		x <- 4
 	}()
