@@ -1899,9 +1899,10 @@ func stringFromJavaLangString(env *Env, ref *ObjectRef) string {
 	if ref.IsNil() {
 		return ""
 	}
+	charset := env.GetUTF8String()
 	env.PrecalculateSignature("(Ljava/lang/String;)[B")
 	var ret []byte
-	err := ref.CallMethod(env, "getBytes", &ret, env.GetUTF8String())
+	err := ref.CallMethod(env, "getBytes", &ret, charset)
 	if err != nil {
 		return ""
 	}
@@ -2098,7 +2099,7 @@ var (
 	DescribeExceptionHandler ExceptionHandler = ExceptionHandlerFunc(func(env *Env, exception *ObjectRef) error {
 		exceptionDescribe(env.jniEnv)
 		exceptionClear(env.jniEnv)
-		return errors.New("Java exception occured. check stderr")
+		return errors.New("Java exception occured. check stderr/logcat")
 	})
 
 	// ThrowableToStringExceptionHandler calls ToString on the exception and returns an error

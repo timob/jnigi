@@ -45,3 +45,11 @@ func AndroidJVM() (*JVM, *Env, error) {
 	}
 	return sharedJVM, sharedEnv, nil
 }
+
+func jni_GetDefaultJavaVMInitArgs(args unsafe.Pointer) jint {
+	panic("jni_GetDefaultJavaVMInitArgs: not implemented on Android")
+}
+
+func jni_CreateJavaVM(pvm unsafe.Pointer, penv unsafe.Pointer, args unsafe.Pointer) jint {
+	panic("jni_CreateJavaVM: not implemented on Android")
+}
