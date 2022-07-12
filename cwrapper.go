@@ -8,7 +8,10 @@ package jnigi
 #include<jni.h>
 #include<stdlib.h>
 
-
+// Android is missing the JNI_VERSION_1_8 constant
+#ifndef JNI_VERSION_1_8
+#define JNI_VERSION_1_8 0x00010008
+#endif
 
 jclass FindClass(JNIEnv* env, char* name) {
 	return (*env)->FindClass (env, name);

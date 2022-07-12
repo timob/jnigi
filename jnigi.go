@@ -119,7 +119,6 @@ type jobj interface {
 	jobj() jobject
 }
 
-
 // CastedObjectRef represents an object reference casted to a super class.
 // This is used to create method signatures for generic classes.
 type CastedObjectRef struct {
@@ -173,6 +172,9 @@ type JVMInitArgs struct {
 
 // CreateJVM calls JNI CreateJavaVM and returns references to the JVM and the initial environment.
 // Use NewJVMInitArgs to create jvmInitArgs.
+//
+// On Android, call AndroidJVM to return references to the Android Application's JVM instead.
+//
 // Must call runtime.LockOSThread() first.
 func CreateJVM(jvmInitArgs *JVMInitArgs) (*JVM, *Env, error) {
 	p := malloc(unsafe.Sizeof((unsafe.Pointer)(nil)))
@@ -1119,7 +1121,7 @@ func (o *ObjectRef) getClass(env *Env) (class jclass, err error) {
 		}
 		defer env.DeleteLocalRef(strObj)
 		var b []byte
-		if err := strObj.CallMethod(env, "getBytes", &b,  env.GetUTF8String()); err != nil {
+		if err := strObj.CallMethod(env, "getBytes", &b, env.GetUTF8String()); err != nil {
 			return 0, err
 		}
 		gotClass := string(b)
@@ -1164,7 +1166,6 @@ func (o *ObjectRef) CallMethod(env *Env, methodName string, dest interface{}, ar
 	} else {
 		return assignDest(retVal, dest)
 	}
-
 
 }
 
