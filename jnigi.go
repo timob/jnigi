@@ -152,6 +152,7 @@ type Env struct {
 	jniEnv           unsafe.Pointer
 	preCalcSig       string
 	classCache       map[string]jclass
+	addtlClassLoader unsafe.Pointer
 	ExceptionHandler ExceptionHandler
 }
 
@@ -162,7 +163,8 @@ func WrapEnv(envPtr unsafe.Pointer) *Env {
 
 // JVM holds a JavaVM value, you only need one of these in your app.
 type JVM struct {
-	javaVM unsafe.Pointer
+	javaVM           unsafe.Pointer
+	addtlClassLoader unsafe.Pointer
 }
 
 // JVMInitArgs holds a JavaVMInitArgs value
@@ -173,8 +175,6 @@ type JVMInitArgs struct {
 // CreateJVM calls JNI CreateJavaVM and returns references to the JVM and the initial environment.
 // Use NewJVMInitArgs to create jvmInitArgs.
 //
-// On Android, call AndroidJVM to return references to the Android Application's JVM instead.
-//
 // Must call runtime.LockOSThread() first.
 func CreateJVM(jvmInitArgs *JVMInitArgs) (*JVM, *Env, error) {
 	p := malloc(unsafe.Sizeof((unsafe.Pointer)(nil)))
@@ -183,12 +183,37 @@ func CreateJVM(jvmInitArgs *JVMInitArgs) (*JVM, *Env, error) {
 	if jni_CreateJavaVM(p2, p, jvmInitArgs.javaVMInitArgs) < 0 {
 		return nil, nil, errors.New("Couldn't instantiate JVM")
 	}
-	jvm := &JVM{*(*unsafe.Pointer)(p2)}
+	jvm := &JVM{javaVM: *(*unsafe.Pointer)(p2)}
 	env := &Env{jniEnv: *(*unsafe.Pointer)(p), classCache: make(map[string]jclass)}
 
 	free(p)
 	free(p2)
 	return jvm, env, nil
+}
+
+// UseJVM initialized jnigi with an existing JVM.
+//
+// This is important for Android, where the existing JVM must be used when running inside an
+// Android app--i.e. Go code built as a shared library.
+//
+// An existing JVM may be obtained through a JNI call made by the JVM after System.loadLibrary:
+//   JNIEXPORT void JNICALL Java_foo_bar_Baz_00024_funcName(JNIEnv *env, jobject thiz) {
+//     // Pass env, thiz and the result of (*env)->GetJavaVM() into Go, then UseJVM()
+//   }
+//
+// If 'thiz' is specified, its class loader will be used to find non-system classes.
+// This should pick up custom classes, as well as libraries from dependencies { } in build.gradle.
+//
+// Parameters can also be derived from the JNI_OnLoad() call made during System.loadLibrary().
+// In this case, 'thiz' should be a custom class in order to retrieve a useful class loader.
+func UseJVM(pvm unsafe.Pointer, penv unsafe.Pointer, thiz unsafe.Pointer) (*JVM, *Env) {
+	var classLoader unsafe.Pointer
+	if thiz != nil {
+		classLoader = getClassLoader(penv, thiz)
+	}
+	jvm := &JVM{javaVM: pvm, addtlClassLoader: classLoader}
+	env := &Env{jniEnv: penv, classCache: make(map[string]jclass), addtlClassLoader: classLoader}
+	return jvm, env
 }
 
 // AttachCurrentThread calls JNI AttachCurrentThread.
@@ -202,7 +227,11 @@ func (j *JVM) AttachCurrentThread() *Env {
 		panic("AttachCurrentThread failed")
 	}
 
-	return &Env{jniEnv: *(*unsafe.Pointer)(p), classCache: make(map[string]jclass)}
+	return &Env{
+		jniEnv:           *(*unsafe.Pointer)(p),
+		classCache:       make(map[string]jclass),
+		addtlClassLoader: j.addtlClassLoader,
+	}
 }
 
 // DetachCurrentThread calls JNI DetachCurrentThread
@@ -229,7 +258,7 @@ func (j *Env) GetJVM() (*JVM, error) {
 		return nil, errors.New("Couldn't get JVM")
 	}
 
-	jvm := &JVM{*(*unsafe.Pointer)(p)}
+	jvm := &JVM{javaVM: *(*unsafe.Pointer)(p), addtlClassLoader: j.addtlClassLoader}
 
 	free(p)
 
@@ -324,7 +353,7 @@ func (j *Env) callFindClass(className string) (jclass, error) {
 	}
 	cnCstr := cString(className)
 	defer free(cnCstr)
-	class := findClass(j.jniEnv, cnCstr)
+	class := findClass(j.jniEnv, cnCstr, j.addtlClassLoader)
 	if class == 0 {
 		return 0, j.handleException()
 	}
@@ -1366,8 +1395,10 @@ func (j *Env) CallStaticMethod(className string, methodName string, dest interfa
 		}
 
 		return assignDest(converted, dest)
-	} else {
+	} else if rType != Void {
 		return assignDest(retVal, dest)
+	} else {
+		return nil
 	}
 }
 

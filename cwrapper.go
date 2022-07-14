@@ -569,7 +569,7 @@ void ReleaseStringCritical(JNIEnv* env, jstring string, jchar* cstring) {
 	(*env)->ReleaseStringCritical (env, string, cstring);
 }
 
-jint AttachCurrentThread(JavaVM* vm, void** penv, void* args) {
+jint AttachCurrentThread(JavaVM* vm, JNIEnv** penv, void* args) {
 	return (*vm)->AttachCurrentThread (vm, penv, args);
 }
 
@@ -667,10 +667,6 @@ type (
 	jdoubleArray  uintptr
 	jint          C.jint
 )
-
-func findClass(env unsafe.Pointer, name unsafe.Pointer) jclass {
-	return jclass(unsafe.Pointer(C.FindClass((*C.JNIEnv)(env), (*C.char)(name))))
-}
 
 func throw(env unsafe.Pointer, obj jthrowable) jint {
 	return jint(C.Throw((*C.JNIEnv)(env), C.jthrowable(unsafe.Pointer(obj))))
@@ -1225,7 +1221,7 @@ func releaseStringCritical(env unsafe.Pointer, string jstring, cstring unsafe.Po
 }
 
 func attachCurrentThread(vm unsafe.Pointer, penv unsafe.Pointer, args unsafe.Pointer) jint {
-	return jint(C.AttachCurrentThread((*C.JavaVM)(vm), (*unsafe.Pointer)(penv), (unsafe.Pointer)(args)))
+	return jint(C.AttachCurrentThread((*C.JavaVM)(vm), (**C.JNIEnv)(penv), args))
 }
 
 func detachCurrentThread(vm unsafe.Pointer) jint {
