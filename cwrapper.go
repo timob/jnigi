@@ -569,7 +569,7 @@ void ReleaseStringCritical(JNIEnv* env, jstring string, jchar* cstring) {
 	(*env)->ReleaseStringCritical (env, string, cstring);
 }
 
-jint AttachCurrentThread(JavaVM* vm, JNIEnv** penv, void* args) {
+jint AttachCurrentThread(JavaVM* vm, void** penv, void* args) {
 	return (*vm)->AttachCurrentThread (vm, penv, args);
 }
 
@@ -1221,7 +1221,7 @@ func releaseStringCritical(env unsafe.Pointer, string jstring, cstring unsafe.Po
 }
 
 func attachCurrentThread(vm unsafe.Pointer, penv unsafe.Pointer, args unsafe.Pointer) jint {
-	return jint(C.AttachCurrentThread((*C.JavaVM)(vm), (**C.JNIEnv)(penv), args))
+	return jint(C.AttachCurrentThread((*C.JavaVM)(vm), (*unsafe.Pointer)(penv), args))
 }
 
 func detachCurrentThread(vm unsafe.Pointer) jint {
