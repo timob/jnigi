@@ -570,7 +570,11 @@ void ReleaseStringCritical(JNIEnv* env, jstring string, jchar* cstring) {
 }
 
 jint AttachCurrentThread(JavaVM* vm, void** penv, void* args) {
+#ifdef ANDROID_JNI
+	return (*vm)->AttachCurrentThread (vm, (JNIEnv**)penv, args);
+#else
 	return (*vm)->AttachCurrentThread (vm, penv, args);
+#endif
 }
 
 jint DetachCurrentThread(JavaVM* vm) {
