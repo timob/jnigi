@@ -4,6 +4,8 @@ Java Native Interface Go Interface.
 A package to access Java from Go code. Can be used from a Go executable or shared library.
 This allows for Go to initiate the JVM or Java to start a Go runtime respectively.
 
+Docs: https://pkg.go.dev/tekao.net/jnigi
+
 ## v1
 As of 2021-12-05 the master branch will be version 2. Packages that used JNIGI before this should update their go.mod to set v1 as the
 version. Or update their code to be compatible with version 2.
@@ -28,6 +30,7 @@ There is a function `AttemptToFindJVMLibPath() string` to help to find the libra
 * Tests for main functions are present.
 
 ## Changes
+* 2022-07-29 Android support, see https://github.com/timob/jnigi/issues/55
 * 2021-12-05 Version 2: New idiomatic API. Converter interfaces. Add docs.
 * 2020-12-09 Add go.mod file, updated import path to tekao.net/jnigi.
 * 2020-08-21 Add ExceptionHandler interface for handling Java exceptions. Add 3 general handlers DescribeExceptionHandler (default), ThrowableToStringExceptionHandler and ThrowableErrorExceptionHandler.
