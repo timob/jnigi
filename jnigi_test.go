@@ -408,7 +408,7 @@ func PTestHandleException(t *testing.T) {
 
 	if _, err := env.NewObject("java/foo/bar"); err == nil {
 		t.Fatal("did not return error")
-	} else if err.Error() != "Java exception occured. check stderr" {
+	} else if err.Error() != "Java exception occured. check stderr/logcat" {
 		t.Fatalf("did not return standard error: %v", err)
 	}
 
@@ -508,7 +508,7 @@ func PTestHandleException(t *testing.T) {
 
 	if _, err := env.NewObject("java/foo/bar"); err == nil {
 		t.Fatal("did not return error")
-	} else if err.Error() != "Java exception occured. check stderr" {
+	} else if err.Error() != "Java exception occured. check stderr/logcat" {
 		t.Fatalf("did not return standard error: %v", err)
 	}
 }

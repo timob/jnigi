@@ -8,7 +8,10 @@ package jnigi
 #include<jni.h>
 #include<stdlib.h>
 
-
+// Android is missing the JNI_VERSION_1_8 constant
+#ifndef JNI_VERSION_1_8
+#define JNI_VERSION_1_8 0x00010008
+#endif
 
 jclass FindClass(JNIEnv* env, char* name) {
 	return (*env)->FindClass (env, name);
@@ -567,7 +570,11 @@ void ReleaseStringCritical(JNIEnv* env, jstring string, jchar* cstring) {
 }
 
 jint AttachCurrentThread(JavaVM* vm, void** penv, void* args) {
+#ifdef ANDROID_JNI
+	return (*vm)->AttachCurrentThread (vm, (JNIEnv**)penv, args);
+#else
 	return (*vm)->AttachCurrentThread (vm, penv, args);
+#endif
 }
 
 jint DetachCurrentThread(JavaVM* vm) {
@@ -664,10 +671,6 @@ type (
 	jdoubleArray  uintptr
 	jint          C.jint
 )
-
-func findClass(env unsafe.Pointer, name unsafe.Pointer) jclass {
-	return jclass(unsafe.Pointer(C.FindClass((*C.JNIEnv)(env), (*C.char)(name))))
-}
 
 func throw(env unsafe.Pointer, obj jthrowable) jint {
 	return jint(C.Throw((*C.JNIEnv)(env), C.jthrowable(unsafe.Pointer(obj))))
@@ -1222,7 +1225,7 @@ func releaseStringCritical(env unsafe.Pointer, string jstring, cstring unsafe.Po
 }
 
 func attachCurrentThread(vm unsafe.Pointer, penv unsafe.Pointer, args unsafe.Pointer) jint {
-	return jint(C.AttachCurrentThread((*C.JavaVM)(vm), (*unsafe.Pointer)(penv), (unsafe.Pointer)(args)))
+	return jint(C.AttachCurrentThread((*C.JavaVM)(vm), (*unsafe.Pointer)(penv), args))
 }
 
 func detachCurrentThread(vm unsafe.Pointer) jint {
