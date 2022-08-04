@@ -1059,6 +1059,8 @@ func typeOfValue(value interface{}) (t Type, className string, err error) {
 	case convertedArray:
 		t = v.getType()
 		className = "java/lang/Object"
+	case nil:
+		t = Void
 	default:
 		err = fmt.Errorf("JNIGI: unknown type %T (value = %v)", v, v)
 	}
@@ -1395,10 +1397,8 @@ func (j *Env) CallStaticMethod(className string, methodName string, dest interfa
 		}
 
 		return assignDest(converted, dest)
-	} else if rType != Void {
-		return assignDest(retVal, dest)
 	} else {
-		return nil
+		return assignDest(retVal, dest)
 	}
 }
 
