@@ -347,6 +347,15 @@ func (j *Env) NewObject(className string, args ...interface{}) (*ObjectRef, erro
 	return &ObjectRef{obj, className, false}, nil
 }
 
+func (j *Env) FindClass(className string) (*ObjectRef, error) {
+	class, err := j.callFindClass(className)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ObjectRef{jobject(class), "java/lang/Class", false}, nil
+}
+
 func (j *Env) callFindClass(className string) (jclass, error) {
 	if v, ok := j.classCache[className]; ok {
 		return v, nil
