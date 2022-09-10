@@ -347,6 +347,8 @@ func (j *Env) NewObject(className string, args ...interface{}) (*ObjectRef, erro
 	return &ObjectRef{obj, className, false}, nil
 }
 
+// FindCLass returns reference to java/lang/Class
+// Argument is className of target class
 func (j *Env) FindClass(className string) (*ObjectRef, error) {
 	class, err := j.callFindClass(className)
 	if err != nil {
