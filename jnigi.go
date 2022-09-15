@@ -87,9 +87,9 @@ func (o *ObjectRef) IsArray() bool {
 	return o.isArray
 }
 
-// Cast return a new *CastedObjectRef containing the receiver with casted class name set to className.
-func (o *ObjectRef) Cast(className string) *CastedObjectRef {
-	return &CastedObjectRef{o, className}
+// Cast return a new *ObjectRef containing the receiver jobject and with class name set to className.
+func (o *ObjectRef) Cast(className string) *ObjectRef {
+	return &ObjectRef{o.jobject, className, o.isArray}
 }
 
 // IsNil is true if ObjectRef has a Nil Java value
@@ -117,18 +117,6 @@ func (o *ObjectRef) JObject() jobject {
 
 type jobj interface {
 	jobj() jobject
-}
-
-// CastedObjectRef represents an object reference casted to a super class.
-// This is used to create method signatures for generic classes.
-type CastedObjectRef struct {
-	*ObjectRef
-	Cast string
-}
-
-// GetClassName returns class name of the cast.
-func (c *CastedObjectRef) GetClassName() string {
-	return c.Cast
 }
 
 // ExceptionHandler is used to convert a thrown exception (java.lang.Throwable) to a Go error.
