@@ -25,6 +25,7 @@ func TestAll(t *testing.T) {
 	PTestEnsureLocalCapacity(t)
 	PTestPushPopLocalFrame(t)
 	PTestHandleException(t)
+	PTestCast(t)	
 	PTestDestroy(t)
 }
 
@@ -511,4 +512,17 @@ func PTestHandleException(t *testing.T) {
 	} else if err.Error() != "Java exception occured. check stderr/logcat" {
 		t.Fatalf("did not return standard error: %v", err)
 	}
+}
+
+func PTestCast(t *testing.T) {
+	str, err := env.NewObject("java/lang/String", []byte("hello world"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// create new object ref with class name java/lang/Foo
+	c := &ObjectRef{str.JObject(), "java/lang/Foo", false}
+	var goBytes []byte
+	if err := c.Cast("java/lang/String").CallMethod(env, "getBytes", &goBytes, env.GetUTF8String()); err != nil {
+		t.Fatal(err)
+	}	
 }
