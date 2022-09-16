@@ -3,33 +3,32 @@
 // license that can be found in the LICENSE file.
 
 /*
-	JNIGI (Java Native Interface Go Interface)
+JNIGI (Java Native Interface Go Interface)
 
-	A package to access Java from Go code.
+A package to access Java from Go code.
 
-	All constructor and method call functions convert parameter arguments and return values.
+All constructor and method call functions convert parameter arguments and return values.
 
-	Arguments are converted from Go to Java if:
-	  - The type is Go built in type and there is an equivalent Java primitive type.
-	  - The type is a slice of such a Go built in type.
-	  - The type implements the ToJavaConverter interface
-	Return values are converted from Java to Go if:
-	  - The type is a Java primitive type.
-	  - The type is a Java array of a primitive type.
-	  - The type implements the ToGoConverter interface
+Arguments are converted from Go to Java if:
+  - The type is Go built in type and there is an equivalent Java primitive type.
+  - The type is a slice of such a Go built in type.
+  - The type implements the ToJavaConverter interface
 
+Return values are converted from Java to Go if:
+  - The type is a Java primitive type.
+  - The type is a Java array of a primitive type.
+  - The type implements the ToGoConverter interface
 
-	Go Builtin to/from Java Primitive:
+Go Builtin to/from Java Primitive:
 
-		bool			Boolean
-		byte			Byte
-		int16			Short
-		uint16			Char
-		int				Int (also int32 -> Int)
-		int64			Long
-		float32			Float
-		float64			Double
-
+	bool			Boolean
+	byte			Byte
+	int16			Short
+	uint16			Char
+	int				Int (also int32 -> Int)
+	int64			Long
+	float32			Float
+	float64			Double
 */
 package jnigi
 
@@ -185,9 +184,10 @@ func CreateJVM(jvmInitArgs *JVMInitArgs) (*JVM, *Env, error) {
 // Android app--i.e. Go code built as a shared library.
 //
 // An existing JVM may be obtained through a JNI call made by the JVM after System.loadLibrary:
-//   JNIEXPORT void JNICALL Java_foo_bar_Baz_00024_funcName(JNIEnv *env, jobject thiz) {
-//     // Pass env, thiz and the result of (*env)->GetJavaVM() into Go, then UseJVM()
-//   }
+//
+//	JNIEXPORT void JNICALL Java_foo_bar_Baz_00024_funcName(JNIEnv *env, jobject thiz) {
+//	  // Pass env, thiz and the result of (*env)->GetJavaVM() into Go, then UseJVM()
+//	}
 //
 // If 'thiz' is specified, its class loader will be used to find non-system classes.
 // This should pick up custom classes, as well as libraries from dependencies { } in build.gradle.
@@ -207,7 +207,8 @@ func UseJVM(pvm unsafe.Pointer, penv unsafe.Pointer, thiz unsafe.Pointer) (*JVM,
 // AttachCurrentThread calls JNI AttachCurrentThread.
 // Must call runtime.LockOSThread() first.
 func (j *JVM) AttachCurrentThread() *Env {
-	p := malloc(unsafe.Sizeof((unsafe.Pointer)(nil)))
+	p := malloc(unsafe.Sizeof((unsafe.Pointer)(nil
+	)))
 
 	//	p := (**C.JNIEnv)(malloc(unsafe.Sizeof((*C.JNIEnv)(nil))))
 
@@ -2154,3 +2155,21 @@ var (
 		return *throwableError
 	})
 )
+
+func (j *Env) DefineClass(className string, loader jobject, bytes []byte) (jclass, error) {
+	if v, ok := j.classCache[className]; ok {
+		return v, nil
+	}
+	cnCstr := cString(className)
+	defer free(cnCstr)
+	ptr := unsafe.Pointer(&bytes[0])
+	class := defineClass(j.jniEnv, cnCstr, loader, ptr, jsize(len(bytes)))
+	if class == 0 {
+		return 0, j.handleException()
+	}
+	ref := newGlobalRef(j.jniEnv, jobject(class))
+	deleteLocalRef(j.jniEnv, jobject(class))
+	j.classCache[className] = jclass(ref)
+
+	return jclass(ref), nil
+}

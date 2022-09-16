@@ -629,6 +629,10 @@ void CallNonvirtualVoidMethodA(JNIEnv* env, jobject obj, jclass clazz, jmethodID
 	(*env)->CallNonvirtualVoidMethodA (env, obj, clazz, methodID, args);
 }
 
+jclass DefineClass(JNIEnv *env,  char *name, jobject loader, jbyte* buf, jsize len) {
+
+    return (*env)->DefineClass(env, name, loader, buf, len);
+}
 */
 import "C"
 
@@ -1280,4 +1284,8 @@ func callNonvirtualDoubleMethodA(env unsafe.Pointer, obj jobject, clazz jclass, 
 
 func callNonvirtualVoidMethodA(env unsafe.Pointer, obj jobject, clazz jclass, methodID jmethodID, args unsafe.Pointer) {
 	C.CallNonvirtualVoidMethodA((*C.JNIEnv)(env), C.jobject(unsafe.Pointer(obj)), C.jclass(unsafe.Pointer(clazz)), C.jmethodID(unsafe.Pointer(methodID)), (*C.jvalue)(args))
+}
+func defineClass(env unsafe.Pointer, name unsafe.Pointer, loader jobject, array unsafe.Pointer, len jsize) jclass {
+	return jclass(unsafe.Pointer(C.DefineClass((*C.JNIEnv)(env), (*C.char)(name), C.jobject(unsafe.Pointer(loader)),
+		(*C.jbyte)(array), C.jsize(len))))
 }
