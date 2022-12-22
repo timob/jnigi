@@ -8,10 +8,11 @@
 package jnigi
 
 /*
-#cgo LDFLAGS:-ldl
+#cgo LDFLAGS:-ldl -framework CoreFoundation
 
 #include <dlfcn.h>
 #include <jni.h>
+#include <CoreFoundation/CoreFoundation.h>
 
 typedef jint (*type_JNI_GetDefaultJavaVMInitArgs)(void*);
 
@@ -27,6 +28,34 @@ type_JNI_CreateJavaVM var_JNI_CreateJavaVM;
 
 jint dyn_JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args) {
     return var_JNI_CreateJavaVM(pvm, penv, args);
+}
+
+// call back for dummy source used to make sure the CFRunLoop doesn't exit right away
+// This callback is called when the source has fired.
+void jnigiCFRSourceCallBack (  void *info  ) {
+}
+
+void jnigiRunCFRLoop(void) {
+    CFRunLoopSourceContext sourceContext;
+    //Create a a sourceContext to be used by our source that makes
+	//sure the CFRunLoop doesn't exit right away
+	sourceContext.version = 0;
+	sourceContext.info = NULL;
+	sourceContext.retain = NULL;
+	sourceContext.release = NULL;
+	sourceContext.copyDescription = NULL;
+	sourceContext.equal = NULL;
+	sourceContext.hash = NULL;
+	sourceContext.schedule = NULL;
+	sourceContext.cancel = NULL;
+	sourceContext.perform = &jnigiCFRSourceCallBack;
+        // Create the Source from the sourceContext
+	CFRunLoopSourceRef sourceRef = CFRunLoopSourceCreate (NULL, 0, &sourceContext);
+	// Use the constant kCFRunLoopCommonModes to add the source to the set of objects
+	// monitored by all the common modes
+	CFRunLoopAddSource (CFRunLoopGetCurrent(),sourceRef,kCFRunLoopCommonModes);
+	// Park this thread in the runloop
+	CFRunLoopRun();
 }
 
 */
@@ -108,4 +137,8 @@ func LoadJVMLib(jvmLibPath string) error {
 	}
 	C.var_JNI_CreateJavaVM = C.type_JNI_CreateJavaVM(ptr)
 	return nil
+}
+
+func RunCFRLoop() {
+	C.jnigiRunCFRLoop()
 }
