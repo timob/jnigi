@@ -9,7 +9,7 @@ package jnigi
 
 /*
 #include <jni.h>
-#include <Windows.h>
+#include <windows.h>
 
 typedef jint (*type_JNI_GetDefaultJavaVMInitArgs)(void*);
 
