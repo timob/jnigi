@@ -181,7 +181,7 @@ func PTestAttach(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Logf("%d", v)
-		if err := jvm.DetachCurrentThread(); err != nil {
+		if err := jvm.DetachCurrentThread(nenv); err != nil {
 			t.Fatal(err)
 		}
 		runtime.UnlockOSThread()

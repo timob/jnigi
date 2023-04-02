@@ -222,7 +222,7 @@ func (j *JVM) AttachCurrentThread() *Env {
 	}
 }
 
-// DetachCurrentThread calls JNI DetachCurrentThread
+// DetachCurrentThread calls JNI DetachCurrentThread, pass Env returned from AttachCurrentThread for current thread.
 func (j *JVM) DetachCurrentThread(env *Env) error {
 	//free cache
 	for _, v := range env.classCache {

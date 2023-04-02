@@ -6,6 +6,9 @@ This allows for Go to initiate the JVM or Java to start a Go runtime respectivel
 
 Docs: https://pkg.go.dev/tekao.net/jnigi
 
+## Pull Requests
+**Please make sure**: `go test` works, add any doc comments for function signature changes.
+
 ## v1
 As of 2021-12-05 the master branch will be version 2. Packages that used JNIGI before this should update their go.mod to set v1 as the
 version. Or update their code to be compatible with version 2.
