@@ -223,7 +223,12 @@ func (j *JVM) AttachCurrentThread() *Env {
 }
 
 // DetachCurrentThread calls JNI DetachCurrentThread
-func (j *JVM) DetachCurrentThread() error {
+func (j *JVM) DetachCurrentThread(env *Env) error {
+	//free cache
+	for _, v := range env.classCache {
+		deleteGlobalRef(env.jniEnv, jobject(v))
+	}
+
 	if detachCurrentThread(j.javaVM) < 0 {
 		return errors.New("JNIGI: detachCurrentThread error")
 	}
