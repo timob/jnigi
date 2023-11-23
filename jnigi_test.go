@@ -410,6 +410,18 @@ func PTestHandleException(t *testing.T) {
 	if _, err := env.NewObject("java/foo/bar"); err == nil {
 		t.Fatal("did not return error")
 	} else {
+		throwableError, ok := err.(ThrowableError)
+		if !ok {
+			t.Fatalf("expected ThrowableError, but got %T", err)
+		}
+
+		// get the cause stack trace, then set this to nil so rest of structure can be tested
+		var causeST []StackTraceElement
+		if v := throwableError.Cause; v != nil {
+			causeST = v.StackTrace
+			throwableError.Cause.StackTrace = nil
+		}
+
 		want := ThrowableError{
 			ClassName:        "java.lang.NoClassDefFoundError",
 			LocalizedMessage: "java/foo/bar",
@@ -420,15 +432,32 @@ func PTestHandleException(t *testing.T) {
 				ClassName:        "java.lang.ClassNotFoundException",
 				LocalizedMessage: "java.foo.bar",
 				Message:          "java.foo.bar",
-				StackTrace:       []StackTraceElement{StackTraceElement{ClassName: "jdk.internal.loader.BuiltinClassLoader", FileName: "BuiltinClassLoader.java", LineNumber: 581, MethodName: "loadClass", IsNativeMethod: false, AsString: "java.base/jdk.internal.loader.BuiltinClassLoader.loadClass(BuiltinClassLoader.java:581)"}, StackTraceElement{ClassName: "jdk.internal.loader.ClassLoaders$AppClassLoader", FileName: "ClassLoaders.java", LineNumber: 178, MethodName: "loadClass", IsNativeMethod: false, AsString: "java.base/jdk.internal.loader.ClassLoaders$AppClassLoader.loadClass(ClassLoaders.java:178)"}, StackTraceElement{ClassName: "java.lang.ClassLoader", FileName: "ClassLoader.java", LineNumber: 527, MethodName: "loadClass", IsNativeMethod: false, AsString: "java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:527)"}},
+				StackTrace:       nil,
 				AsString:         "java.lang.ClassNotFoundException: java.foo.bar",
 				Cause:            (*ThrowableError)(nil),
 			},
 		}
 
-		if !assert.Equal(t, want, err) {
+		if !assert.Equal(t, want, throwableError) {
 			t.Fail()
 		}
+		if !assert.Equal(t, "java.lang.NoClassDefFoundError: java/foo/bar", throwableError.Error()) {
+			t.Fail()
+		}
+		if !assert.Equal(t, "java.lang.ClassNotFoundException: java.foo.bar", throwableError.Cause.Error()) {
+			t.Fail()
+		}
+
+		if !assert.NotNil(t, causeST) {
+			t.Fail()
+		} else {
+			for _, v := range causeST {
+				if !assert.NotEmpty(t, v) {
+					t.Fail()
+				}
+			}
+		}
+
 	}
 
 	env.ExceptionHandler = nil
