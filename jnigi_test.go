@@ -5,8 +5,10 @@
 package jnigi
 
 import (
-	"testing"
+	"github.com/stretchr/testify/assert"
 	"runtime"
+	"strings"
+	"testing"
 )
 
 var env *Env
@@ -25,7 +27,7 @@ func TestAll(t *testing.T) {
 	PTestEnsureLocalCapacity(t)
 	PTestPushPopLocalFrame(t)
 	PTestHandleException(t)
-	PTestCast(t)	
+	PTestCast(t)
 	PTestDestroy(t)
 }
 
@@ -45,23 +47,6 @@ func PTestInit(t *testing.T) {
 	jvm = jvm2
 
 	t.Logf("%x", e2.jniEnv)
-
-}
-
-func toGoStr(t *testing.T, o *ObjectRef) string {
-	var goBytes []byte
-	if err := o.CallMethod(env, "getBytes", &goBytes); err != nil {
-		t.Fatal(err)
-	}
-	return string(goBytes)
-}
-
-func fromGoStr(t *testing.T, str string) *ObjectRef {
-	jstr, err := env.NewObject("java/lang/String", []byte(str))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return jstr
 }
 
 func PTestBasic(t *testing.T) {
@@ -70,25 +55,23 @@ func PTestBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	var v int
 	if err := obj.CallMethod(env, "hashCode", &v); err != nil {
 		t.Fatal(err)
 	}
 
 	// byte array argument, byte array method
-	testStr := "hello world"
+	var testStr string = "hello world"
 	str, err := env.NewObject("java/lang/String", []byte(testStr))
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	var goBytes []byte
 	if err := str.CallMethod(env, "getBytes", &goBytes, env.GetUTF8String()); err != nil {
 		t.Fatal(err)
 	}
-	if string(goBytes) != testStr {
-		t.Errorf("basic test failed")
+	if !assert.Equal(t, testStr, string(goBytes)) {
+		t.Fail()
 	}
 
 	// object method, int arg, object arg
@@ -96,12 +79,11 @@ func PTestBasic(t *testing.T) {
 	if err := str.CallMethod(env, "substring", str2, 6); err != nil {
 		t.Fatal(err)
 	}
-
 	var dummy []byte
 	if err := str2.CallMethod(env, "getBytes", &dummy); err != nil {
 		t.Fatal(err)
 	}
-
+	// test precalculated signature
 	env.PrecalculateSignature("(Ljava/lang/String;)Z")
 	var same bool
 	if err := str.CallMethod(env, "endsWith", &same, str2); err != nil {
@@ -116,7 +98,6 @@ func PTestBasic(t *testing.T) {
 	if err := env.CallStaticMethod("java/lang/System", "getProperty", jvmVer, fromGoStr(t, "java.vm.version")); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf(toGoStr(t, jvmVer))
 
 	// get static field
 	var calPos int
@@ -124,7 +105,6 @@ func PTestBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("april = %d", calPos)
 
 	// set/get object field
 	pt, err := env.NewObject("java/awt/Point")
@@ -140,8 +120,8 @@ func PTestBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if gotX != 5 {
-		t.Errorf("basic test failed")
+	if !assert.Equal(t, 5, gotX) {
+		t.Fail()
 	}
 
 	src := "fromChar"
@@ -157,8 +137,8 @@ func PTestBasic(t *testing.T) {
 	if err := str.CallMethod(env, "getBytes", &goBytes, env.GetUTF8String()); err != nil {
 		t.Fatal(err)
 	}
-	if string(goBytes) != src {
-		t.Errorf("basic test failed")
+	if !assert.Equal(t, src, string(goBytes)) {
+		t.Fail()
 	}
 }
 
@@ -193,7 +173,8 @@ func PTestAttach(t *testing.T) {
 }
 
 func PTestObjectArrays(t *testing.T) {
-	str, err := env.NewObject("java/lang/String", []byte("splitXme"))
+	var subject = "splitXme"
+	str, err := env.NewObject("java/lang/String", []byte(subject))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,12 +190,16 @@ func PTestObjectArrays(t *testing.T) {
 	}
 
 	parts := env.FromObjectArray(v)
+	var got []string
 	for _, p := range parts {
 		var part []byte
 		if err := p.CallMethod(env, "getBytes", &part); err != nil {
 			t.Fatal(err)
 		}
-		t.Logf("%s", string(part))
+		got = append(got, string(part))
+	}
+	if !assert.Equal(t, subject, strings.Join(got, "X")) {
+		t.Fail()
 	}
 
 	array := env.ToObjectArray(parts, "java/lang/String")
@@ -231,7 +216,9 @@ func PTestObjectArrays(t *testing.T) {
 	if err := jClassName.CallMethod(env, "getBytes", &className); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("%s", string(className))
+	if !assert.Equal(t, "[Ljava.lang.String;", string(className)) {
+		t.Fail()
+	}
 }
 
 type GoString string
@@ -269,8 +256,8 @@ func PTestConvert(t *testing.T) {
 	if err := str.CallMethod(env, "substring", &firstWord, 0, 4); err != nil {
 		t.Fatal(err)
 	}
-	if firstWord != "test" {
-		t.Errorf("convert test failed got %s", firstWord)
+	if !assert.Equal(t, GoString("test"), firstWord) {
+		t.Fail()
 	}
 }
 
@@ -297,7 +284,7 @@ func PTestInstanceOf(t *testing.T) {
 	if isInstance, err := obj.IsInstanceOf(env, "java/lang/String"); err != nil {
 		t.Fatal(err)
 	} else if !isInstance {
-		t.Fatal("instanceof test failed")
+		t.Error("InstanceOf test failed")
 	}
 }
 
@@ -310,8 +297,8 @@ func PTestByteArray(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if toGoStr(t, str) != "hello" {
-		t.Fatal("ByteArray test failed")
+	if !assert.Equal(t, "hello", toGoStr(t, str)) {
+		t.Fail()
 	}
 
 	testStr := "hello world"
@@ -320,15 +307,15 @@ func PTestByteArray(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	arr := NewArrayRef(Byte|Array)
+	arr := NewArrayRef(Byte | Array)
 	if err := str.CallMethod(env, "getBytes", arr, env.GetUTF8String()); err != nil {
 		t.Fatal(err)
 	}
 
 	ba2 := env.NewByteArrayFromObject(arr.ObjectRef)
 	bytes = ba2.GetCritical(env)
-	if string(bytes) != "hello world" {
-		t.Logf("ByteArray test failed")
+	if !assert.Equal(t, "hello world", string(bytes)) {
+		t.Fail()
 	}
 	ba2.ReleaseCritical(env, bytes)
 }
@@ -346,7 +333,6 @@ func PTestDestroy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DestroyJVM failed %s", err)
 	}
-	t.Logf("Call DestroyJVM: passed")
 }
 
 func PTestEnsureLocalCapacity(t *testing.T) {
@@ -406,102 +392,42 @@ func PTestPushPopLocalFrame(t *testing.T) {
 }
 
 func PTestHandleException(t *testing.T) {
-
+	jexceptErrMsg := "Java exception occurred. check stderr/logcat"
 	if _, err := env.NewObject("java/foo/bar"); err == nil {
 		t.Fatal("did not return error")
-	} else if err.Error() != "Java exception occured. check stderr/logcat" {
-		t.Fatalf("did not return standard error: %v", err)
+	} else if !assert.Equal(t, jexceptErrMsg, err.Error()) {
+		t.Fatal("did not return standard error")
 	}
 
 	env.ExceptionHandler = ThrowableToStringExceptionHandler
 	if _, err := env.NewObject("java/foo/bar"); err == nil {
 		t.Fatal("did not return error")
-	} else if err.Error() != "java.lang.NoClassDefFoundError: java/foo/bar" {
-		t.Fatalf("unexpected result of ToString: %v", err)
+	} else if !assert.Equal(t, "java.lang.NoClassDefFoundError: java/foo/bar", err.Error()) {
+		t.Fatal("did not return standard error")
 	}
 
 	env.ExceptionHandler = ThrowableErrorExceptionHandler
 	if _, err := env.NewObject("java/foo/bar"); err == nil {
 		t.Fatal("did not return error")
 	} else {
-
-		throwableError, ok := err.(ThrowableError)
-		if !ok {
-			t.Fatalf("expected ThrowableError, but got %T", err)
+		want := ThrowableError{
+			ClassName:        "java.lang.NoClassDefFoundError",
+			LocalizedMessage: "java/foo/bar",
+			Message:          "java/foo/bar",
+			StackTrace:       []StackTraceElement{},
+			AsString:         "java.lang.NoClassDefFoundError: java/foo/bar",
+			Cause: &ThrowableError{
+				ClassName:        "java.lang.ClassNotFoundException",
+				LocalizedMessage: "java.foo.bar",
+				Message:          "java.foo.bar",
+				StackTrace:       []StackTraceElement{StackTraceElement{ClassName: "jdk.internal.loader.BuiltinClassLoader", FileName: "BuiltinClassLoader.java", LineNumber: 581, MethodName: "loadClass", IsNativeMethod: false, AsString: "java.base/jdk.internal.loader.BuiltinClassLoader.loadClass(BuiltinClassLoader.java:581)"}, StackTraceElement{ClassName: "jdk.internal.loader.ClassLoaders$AppClassLoader", FileName: "ClassLoaders.java", LineNumber: 178, MethodName: "loadClass", IsNativeMethod: false, AsString: "java.base/jdk.internal.loader.ClassLoaders$AppClassLoader.loadClass(ClassLoaders.java:178)"}, StackTraceElement{ClassName: "java.lang.ClassLoader", FileName: "ClassLoader.java", LineNumber: 527, MethodName: "loadClass", IsNativeMethod: false, AsString: "java.base/java.lang.ClassLoader.loadClass(ClassLoader.java:527)"}},
+				AsString:         "java.lang.ClassNotFoundException: java.foo.bar",
+				Cause:            (*ThrowableError)(nil),
+			},
 		}
 
-		if err.Error() != "java.lang.NoClassDefFoundError: java/foo/bar" {
-			t.Fatalf("unexpected error message: %v", err)
-		}
-
-		if v := throwableError.ClassName; v != "java.lang.NoClassDefFoundError" {
-			t.Fatalf("unexpected class name: %s", v)
-		}
-
-		if v := throwableError.LocalizedMessage; v != "java/foo/bar" {
-			t.Fatalf("unexpected localized message: %s", v)
-		}
-
-		if v := throwableError.Message; v != "java/foo/bar" {
-			t.Fatalf("unexpected message: %s", v)
-		}
-
-		if v := throwableError.AsString; v != "java.lang.NoClassDefFoundError: java/foo/bar" {
-			t.Fatalf("unexpected toString value: %s", v)
-		}
-
-		if v := throwableError.StackTrace; len(v) > 0 {
-			t.Fatal("expect empty stack trace")
-		}
-
-		if throwableError.Cause == nil {
-			t.Fatal("expected a cause")
-		}
-
-		cause := throwableError.Cause
-
-		if cause.Error() != "java.lang.ClassNotFoundException: java.foo.bar" {
-			t.Fatalf("unexpected error message: %v", cause)
-		}
-
-		if v := cause.ClassName; v != "java.lang.ClassNotFoundException" {
-			t.Fatalf("unexpected class name: %s", v)
-		}
-
-		if v := cause.LocalizedMessage; v != "java.foo.bar" {
-			t.Fatalf("unexpected localized message: %s", v)
-		}
-
-		if v := cause.Message; v != "java.foo.bar" {
-			t.Fatalf("unexpected message: %s", v)
-		}
-
-		if v := cause.AsString; v != "java.lang.ClassNotFoundException: java.foo.bar" {
-			t.Fatalf("unexpected toString value: %s", v)
-		}
-
-		if v := cause.StackTrace; v == nil {
-			t.Fatal("expected a stack trace")
-		} else if len(cause.StackTrace) == 0 {
-			t.Fatal("expected stack trace entries")
-		}
-
-		for i, v := range cause.StackTrace {
-			if v.AsString == "" {
-				t.Fatalf("stack trace index %d: no AsString value", i)
-			}
-			if v.ClassName == "" {
-				t.Fatalf("stack trace index %d: no ClassName value", i)
-			}
-			if v.FileName == "" {
-				t.Fatalf("stack trace index %d: no FileName value", i)
-			}
-			if v.MethodName == "" {
-				t.Fatalf("stack trace index %d: no MethodName value", i)
-			}
-			if v.LineNumber == 0 {
-				t.Fatalf("stack trace index %d: no LineNumber value", i)
-			}
+		if !assert.Equal(t, want, err) {
+			t.Fail()
 		}
 	}
 
@@ -509,8 +435,8 @@ func PTestHandleException(t *testing.T) {
 
 	if _, err := env.NewObject("java/foo/bar"); err == nil {
 		t.Fatal("did not return error")
-	} else if err.Error() != "Java exception occured. check stderr/logcat" {
-		t.Fatalf("did not return standard error: %v", err)
+	} else if !assert.Equal(t, jexceptErrMsg, err.Error()) {
+		t.Error("did not return standard error")
 	}
 }
 
@@ -524,5 +450,21 @@ func PTestCast(t *testing.T) {
 	var goBytes []byte
 	if err := c.Cast("java/lang/String").CallMethod(env, "getBytes", &goBytes, env.GetUTF8String()); err != nil {
 		t.Fatal(err)
-	}	
+	}
+}
+
+func toGoStr(t *testing.T, o *ObjectRef) string {
+	var goBytes []byte
+	if err := o.CallMethod(env, "getBytes", &goBytes); err != nil {
+		t.Fatal(err)
+	}
+	return string(goBytes)
+}
+
+func fromGoStr(t *testing.T, str string) *ObjectRef {
+	jstr, err := env.NewObject("java/lang/String", []byte(str))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return jstr
 }

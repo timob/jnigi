@@ -2125,7 +2125,7 @@ func NewThrowableErrorFromObject(env *Env, throwable *ObjectRef) (*ThrowableErro
 }
 
 var (
-	errThrowableConvertFail = fmt.Errorf("Java exception occured")
+	errThrowableConvertFail = fmt.Errorf("Java exception occurred")
 
 	// DefaultExceptionHandler is an alias for DescribeExceptionHandler, which is the default.
 	DefaultExceptionHandler = DescribeExceptionHandler
@@ -2134,7 +2134,7 @@ var (
 	DescribeExceptionHandler ExceptionHandler = ExceptionHandlerFunc(func(env *Env, exception *ObjectRef) error {
 		exceptionDescribe(env.jniEnv)
 		exceptionClear(env.jniEnv)
-		return errors.New("Java exception occured. check stderr/logcat")
+		return errors.New("Java exception occurred. check stderr/logcat")
 	})
 
 	// ThrowableToStringExceptionHandler calls ToString on the exception and returns an error
@@ -2145,7 +2145,7 @@ var (
 		if exception.IsNil() {
 			return errThrowableConvertFail
 		}
-		msg := "Java exception occured"
+		msg := "Java exception occurred"
 		callStringMethodAndAssign(env, exception, "toString", func(s string) {
 			if s == "" {
 				return
