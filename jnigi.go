@@ -469,17 +469,14 @@ func (j *Env) toGoArray(array jobject, aType Type) (interface{}, error) {
 		}
 		return v, nil
 	case Int:
-		v := make([]int, len)
+		v := make([]int32, len)
 		if len >= 0 {
 			ptr := getIntArrayElements(j.jniEnv, jintArray(array), nil)
 			if j.exceptionCheck() {
 				return nil, j.handleException()
 			}
 			elems := (*(*[big]int32)(ptr))[0:len]
-			//copy(v, elems)
-			for i := 0; i < len; i++ {
-				v[i] = int(elems[i])
-			}
+			copy(v, elems)
 			releaseIntArrayElements(j.jniEnv, jintArray(array), ptr, jint(jni_abort))
 		}
 		return v, nil
@@ -769,7 +766,7 @@ func (j *Env) toJavaArray(src interface{}) (jobject, error) {
 		} else {
 			data := make([]int32, len(v))
 			for i := 0; i < len(v); i++ {
-				data[i] = int32(v[i])
+				data[i] = assignJavaIntFromInt(v[i])
 			}
 			ptr = unsafe.Pointer(&data[0])
 		}
@@ -881,7 +878,7 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 		case int32:
 			argList[i] = uint64(jint(v))
 		case int:
-			argList[i] = uint64(jint(int32(v)))
+			argList[i] = uint64(jint(assignJavaIntFromInt(v)))
 		case int64:
 			argList[i] = uint64(jlong(v))
 		case float32:
@@ -1256,7 +1253,7 @@ func (o *ObjectRef) genericCallMethod(env *Env, methodName string, rType Type, r
 	case rType == Short:
 		retVal = int16(callShortMethodA(env.jniEnv, o.jobject, mid, jniArgs))
 	case rType == Int:
-		retVal = int(callIntMethodA(env.jniEnv, o.jobject, mid, jniArgs))
+		retVal = int32(callIntMethodA(env.jniEnv, o.jobject, mid, jniArgs))
 	case rType == Long:
 		retVal = int64(callLongMethodA(env.jniEnv, o.jobject, mid, jniArgs))
 	case rType == Float:
@@ -1357,7 +1354,7 @@ func (o *ObjectRef) genericCallNonvirtualMethod(env *Env, className string, meth
 	case rType == Short:
 		retVal = int16(callNonvirtualShortMethodA(env.jniEnv, o.jobject, class, mid, jniArgs))
 	case rType == Int:
-		retVal = int(callNonvirtualIntMethodA(env.jniEnv, o.jobject, class, mid, jniArgs))
+		retVal = int32(callNonvirtualIntMethodA(env.jniEnv, o.jobject, class, mid, jniArgs))
 	case rType == Long:
 		retVal = int64(callNonvirtualLongMethodA(env.jniEnv, o.jobject, class, mid, jniArgs))
 	case rType == Float:
@@ -1458,7 +1455,7 @@ func (j *Env) genericCallStaticMethod(className string, methodName string, rType
 	case rType == Short:
 		retVal = int16(callStaticShortMethodA(j.jniEnv, class, mid, jniArgs))
 	case rType == Int:
-		retVal = int(callStaticIntMethodA(j.jniEnv, class, mid, jniArgs))
+		retVal = int32(callStaticIntMethodA(j.jniEnv, class, mid, jniArgs))
 	case rType == Long:
 		retVal = int64(callStaticLongMethodA(j.jniEnv, class, mid, jniArgs))
 	case rType == Float:
@@ -1558,7 +1555,7 @@ func (o *ObjectRef) genericGetField(env *Env, fieldName string, fType Type, fCla
 	case fType == Short:
 		retVal = int16(getShortField(env.jniEnv, o.jobject, fid))
 	case fType == Int:
-		retVal = int(getIntField(env.jniEnv, o.jobject, fid))
+		retVal = int32(getIntField(env.jniEnv, o.jobject, fid))
 	case fType == Long:
 		retVal = int64(getLongField(env.jniEnv, o.jobject, fid))
 	case fType == Float:
@@ -1616,7 +1613,7 @@ func (o *ObjectRef) SetField(env *Env, fieldName string, value interface{}) erro
 	case int32:
 		setIntField(env.jniEnv, o.jobject, fid, jint(v))
 	case int:
-		setIntField(env.jniEnv, o.jobject, fid, jint(int32(v)))
+		setIntField(env.jniEnv, o.jobject, fid, jint(assignJavaIntFromInt(v)))
 	case int64:
 		setLongField(env.jniEnv, o.jobject, fid, jlong(v))
 	case float32:
@@ -1702,7 +1699,7 @@ func (j *Env) genericGetStaticField(className string, fieldName string, fType Ty
 	case fType == Short:
 		retVal = int16(getStaticShortField(j.jniEnv, class, fid))
 	case fType == Int:
-		retVal = int(getStaticIntField(j.jniEnv, class, fid))
+		retVal = int32(getStaticIntField(j.jniEnv, class, fid))
 	case fType == Long:
 		retVal = int64(getStaticLongField(j.jniEnv, class, fid))
 	case fType == Float:
@@ -1760,7 +1757,7 @@ func (j *Env) SetStaticField(className string, fieldName string, value interface
 	case int32:
 		setStaticIntField(j.jniEnv, class, fid, jint(v))
 	case int:
-		setStaticIntField(j.jniEnv, class, fid, jint(int32(v)))
+		setStaticIntField(j.jniEnv, class, fid, jint(assignJavaIntFromInt(v)))
 	case int64:
 		setStaticLongField(j.jniEnv, class, fid, jlong(v))
 	case float32:

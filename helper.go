@@ -42,6 +42,7 @@ func AttemptToFindJVMLibPath() string {
 	return libPath
 }
 
+// there should be no cases where val underlying type is an int or []int
 func assignDest(val interface{}, dest interface{}) error {
 	if dest == nil {
 		return nil
@@ -69,9 +70,12 @@ func assignDest(val interface{}, dest interface{}) error {
 			*dv = v
 			assigned = true
 		}
-	case int:
-		if dv, ok := dest.(*int); ok {
+	case int32:
+		if dv, ok := dest.(*int32); ok {
 			*dv = v
+			assigned = true
+		} else if dv, ok := dest.(*int); ok {
+			*dv = int(v)
 			assigned = true
 		}
 	case int64:
@@ -109,9 +113,16 @@ func assignDest(val interface{}, dest interface{}) error {
 			*dv = v
 			assigned = true
 		}
-	case []int:
-		if dv, ok := dest.(*[]int); ok {
+	case []int32:
+		if dv, ok := dest.(*[]int32); ok {
 			*dv = v
+			assigned = true
+		} else if dv, ok := dest.(*[]int); ok {
+			sliceAssigned := make([]int, len(v))
+			for i, e := range v {
+				sliceAssigned[i] = int(e)
+			}
+			*dv = sliceAssigned
 			assigned = true
 		}
 	case []int64:
@@ -140,4 +151,13 @@ func assignDest(val interface{}, dest interface{}) error {
 		return fmt.Errorf("JNIGI Error: expected dest argument to be %T (not %T) or nil", val, dest)
 	}
 	return nil
+}
+
+// returned int32 can be converted to jint
+func assignJavaIntFromInt(v int) int32 {
+	v2 := int32(v)
+	if int(v2) != v {
+		fmt.Fprintf(os.Stderr, "JNIGI WARNING int -> Int conversion changed value")
+	}
+	return v2
 }
