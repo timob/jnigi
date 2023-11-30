@@ -59,6 +59,7 @@ func PTestBasic(t *testing.T) {
 	if err := obj.CallMethod(env, "hashCode", &v); err != nil {
 		t.Fatal(err)
 	}
+	env.DeleteLocalRef(obj)
 
 	// byte array argument, byte array method
 	var testStr string = "hello world"
@@ -66,6 +67,7 @@ func PTestBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(str)
 	var goBytes []byte
 	if err := str.CallMethod(env, "getBytes", &goBytes, env.GetUTF8String()); err != nil {
 		t.Fatal(err)
@@ -79,6 +81,8 @@ func PTestBasic(t *testing.T) {
 	if err := str.CallMethod(env, "substring", str2, 6); err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(str2)
+
 	var dummy []byte
 	if err := str2.CallMethod(env, "getBytes", &dummy); err != nil {
 		t.Fatal(err)
@@ -111,6 +115,8 @@ func PTestBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(pt)
+
 	err = pt.SetField(env, "x", 5)
 	if err != nil {
 		t.Fatal(err)
@@ -133,6 +139,7 @@ func PTestBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(str)
 
 	if err := str.CallMethod(env, "getBytes", &goBytes, env.GetUTF8String()); err != nil {
 		t.Fatal(err)
@@ -170,6 +177,8 @@ func PTestAttach(t *testing.T) {
 	}()
 
 	<-x
+	env.DeleteGlobalRef(gObj)
+	env.DeleteLocalRef(obj)
 }
 
 func PTestObjectArrays(t *testing.T) {
@@ -178,11 +187,12 @@ func PTestObjectArrays(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	defer env.DeleteLocalRef(str)
 	regex, err := env.NewObject("java/lang/String", []byte("X"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(regex)
 
 	v := NewObjectArrayRef("java/lang/String")
 	if err := str.CallMethod(env, "split", v, regex); err != nil {
@@ -208,10 +218,12 @@ func PTestObjectArrays(t *testing.T) {
 	if err := array.CallMethod(env, "getClass", class); err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(class)
 	jClassName := NewObjectRef("java/lang/String")
 	if err := class.CallMethod(env, "getName", jClassName); err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(jClassName)
 	var className []byte
 	if err := jClassName.CallMethod(env, "getBytes", &className); err != nil {
 		t.Fatal(err)
@@ -251,6 +263,7 @@ func PTestConvert(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(str)
 
 	var firstWord GoString
 	if err := str.CallMethod(env, "substring", &firstWord, 0, 4); err != nil {
@@ -266,11 +279,14 @@ func PTestInstanceOf(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(alist)
 
 	str, err := env.NewObject("java/lang/String")
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(str)
+
 	var dummy bool
 	if err := alist.CallMethod(env, "add", &dummy, str.Cast("java/lang/Object")); err != nil {
 		t.Fatal(err)
@@ -280,6 +296,7 @@ func PTestInstanceOf(t *testing.T) {
 	if err := alist.CallMethod(env, "get", obj, 0); err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(obj)
 
 	if isInstance, err := obj.IsInstanceOf(env, "java/lang/String"); err != nil {
 		t.Fatal(err)
@@ -300,12 +317,14 @@ func PTestByteArray(t *testing.T) {
 	if !assert.Equal(t, "hello", toGoStr(t, str)) {
 		t.Fail()
 	}
+	env.DeleteLocalRef(str)
 
 	testStr := "hello world"
 	str, err = env.NewObject("java/lang/String", []byte(testStr))
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(str)
 
 	arr := NewArrayRef(Byte | Array)
 	if err := str.CallMethod(env, "getBytes", arr, env.GetUTF8String()); err != nil {
