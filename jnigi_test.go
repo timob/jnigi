@@ -104,10 +104,17 @@ func PTestBasic(t *testing.T) {
 	}
 
 	// get static field
+	err = env.SetStaticField("java/util/Calendar", "APRIL", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var calPos int
 	err = env.GetStaticField("java/util/Calendar", "APRIL", &calPos)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !assert.Equal(t, 5, calPos) {
+		t.Fail()
 	}
 
 	// set/get object field
@@ -332,11 +339,17 @@ func PTestByteArray(t *testing.T) {
 	}
 
 	ba2 := env.NewByteArrayFromObject(arr.ObjectRef)
-	bytes = ba2.GetCritical(env)
+
+	bytes = ba2.CopyBytes(env)
 	if !assert.Equal(t, "hello world", string(bytes)) {
 		t.Fail()
 	}
-	ba2.ReleaseCritical(env, bytes)
+
+	ba3 := env.NewByteArrayFromSlice([]byte("hello world!"))
+	bytes = ba3.CopyBytes(env)
+	if !assert.Equal(t, "hello world!", string(bytes)) {
+		t.Fail()
+	}
 }
 
 func PTestGetJVM(t *testing.T) {
