@@ -6,6 +6,8 @@ package jnigi
 
 import (
 	"github.com/stretchr/testify/assert"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -28,6 +30,7 @@ func TestAll(t *testing.T) {
 	PTestPushPopLocalFrame(t)
 	PTestHandleException(t)
 	PTestCast(t)
+	PTestRegisterNative(t)
 	PTestDestroy(t)
 }
 
@@ -39,7 +42,8 @@ func PTestInit(t *testing.T) {
 		t.Fatal(err)
 	}
 	runtime.LockOSThread()
-	jvm2, e2, err := CreateJVM(NewJVMInitArgs(false, true, DEFAULT_VERSION, []string{"-Xcheck:jni"}))
+	cwd, _ := os.Getwd()
+	jvm2, e2, err := CreateJVM(NewJVMInitArgs(false, true, DEFAULT_VERSION, []string{"-Xcheck:jni", "-Djava.class.path=" + filepath.Join(cwd, "java/test/out")}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -511,6 +515,28 @@ func PTestCast(t *testing.T) {
 	var goBytes []byte
 	if err := c.Cast("java/lang/String").CallMethod(env, "getBytes", &goBytes, env.GetUTF8String()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func PTestRegisterNative(t *testing.T) {
+	if err := env.RegisterNative("local/JnigiTesting", "Greet", ObjectType("java/lang/String"), []interface{}{ObjectType("java/lang/String")}, c_go_callback_Greet); err != nil {
+		t.Fatal(err)
+	}
+	objRef, err := env.NewObject("local/JnigiTesting")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nameRef, err := env.NewObject("java/lang/String", []byte("World"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	strRef := NewObjectRef("java/lang/String")
+	if err := objRef.CallMethod(env, "Greet", strRef, nameRef); err != nil {
+		t.Fatal(err)
+	}
+	goStr := toGoStr(t, strRef)
+	if !assert.Equal(t, "Hello World!", goStr) {
+		t.Fail()
 	}
 }
 

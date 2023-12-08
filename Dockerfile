@@ -18,6 +18,6 @@ RUN go mod download && go mod verify
 
 COPY . .
 
-CMD go test
+CMD ./testing.sh
 
 
