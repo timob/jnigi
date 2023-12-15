@@ -60,6 +60,15 @@ func PTestBasic(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// test env.GetUTF8String() should be independent of PrecalculateSignature
+	sigStr := "dummy"
+	env.PrecalculateSignature(sigStr)
+	env.GetUTF8String()
+	if !assert.Equal(t, sigStr, env.preCalcSig) {
+		t.Fail()
+	}
+	env.preCalcSig = ""
+
 	// byte array argument, byte array method
 	var testStr string = "hello world"
 	str, err := env.NewObject("java/lang/String", []byte(testStr))
