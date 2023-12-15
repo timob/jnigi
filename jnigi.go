@@ -1881,6 +1881,10 @@ var utf8 *ObjectRef
 // GetUTF8String return global reference to java/lang/String containing "UTF-8"
 func (j *Env) GetUTF8String() *ObjectRef {
 	if utf8 == nil {
+		// make sure we don't use any preCalSig set when we do NewObject
+		savePrecalSig := j.preCalcSig
+		j.preCalcSig = ""
+
 		str, err := j.NewObject("java/lang/String", []byte("UTF-8"))
 		if err != nil {
 			panic(err)
@@ -1888,6 +1892,7 @@ func (j *Env) GetUTF8String() *ObjectRef {
 		global := j.NewGlobalRef(str)
 		j.DeleteLocalRef(str)
 		utf8 = global
+		j.preCalcSig = savePrecalSig
 	}
 
 	return utf8
