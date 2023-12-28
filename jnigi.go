@@ -10,25 +10,25 @@
 	All constructor and method call functions convert parameter arguments and return values.
 
 	Arguments are converted from Go to Java if:
-	  - The type is Go built in type and there is an equivalent Java primitive type.
+	  - The type is Go built in type and there is an equivalent Java "primitive" type.
 	  - The type is a slice of such a Go built in type.
 	  - The type implements the ToJavaConverter interface
 	Return values are converted from Java to Go if:
-	  - The type is a Java primitive type.
-	  - The type is a Java array of a primitive type.
+	  - The type is a Java "primitive" type.
+	  - The type is a Java array of a "primitive" type.
 	  - The type implements the ToGoConverter interface
 
 
-	Go Builtin to/from Java Primitive:
+	Go Builtin to/from Java "primitive":
 
-		bool			Boolean
-		byte			Byte
-		int16			Short
-		uint16			Char
-		int				Int (also int32 -> Int)
-		int64			Long
-		float32			Float
-		float64			Double
+		bool			boolean
+		byte			byte
+		int16			short
+		uint16			char
+		int				int (also int32 -> int)
+		int64			long
+		float32			float
+		float64			double
 
 */
 package jnigi
@@ -413,7 +413,10 @@ func (j *Env) FromObjectArray(objRef *ObjectRef) []*ObjectRef {
 	return v
 }
 
-func (j *Env) toGoArray(array jobject, aType Type) (interface{}, error) {
+// ToGoArray converts Java prim array object in array with type aType to
+// returned go array. Normally this method does not need to be called because
+// New/Call/Field methods all call this internally.
+func (j *Env) ToGoArray(array jobject, aType Type) (interface{}, error) {
 	len := int(getArrayLength(j.jniEnv, jarray(array)))
 	// exception check?
 
@@ -628,7 +631,11 @@ func (b *ByteArray) CopyBytes(env *Env) []byte {
 
 // this copies slice contents in to C memory before passing this pointer to JNI array function
 // if copy var is set to true
-func (j *Env) toJavaArray(src interface{}) (jobject, error) {
+
+// ToJavaArray converts go array in src to returned Java prim array object.
+// Normally this method does not need to be called because New/Call/Field
+// methods all call this internally.
+func (j *Env) ToJavaArray(src interface{}) (jobject, error) {
 	switch v := src.(type) {
 	case []bool:
 		ba := newBooleanArray(j.jniEnv, jsize(len(v)))
@@ -886,7 +893,7 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 		case float64:
 			argList[i] = uint64(jdouble(v))
 		case []bool, []byte, []int16, []uint16, []int32, []int, []int64, []float32, []float64:
-			if array, arrayErr := j.toJavaArray(v); arrayErr == nil {
+			if array, arrayErr := j.ToJavaArray(v); arrayErr == nil {
 				argList[i] = uint64(array)
 				refs = append(refs, array)
 			} else {
@@ -1188,7 +1195,7 @@ func (o *ObjectRef) CallMethod(env *Env, methodName string, dest interface{}, ar
 		return v.ConvertToGo(retVal.(*ObjectRef))
 	} else if rType.isArray() && rType != Object|Array {
 		// If return type is an array of convertable java to go types, do the conversion
-		converted, err := env.toGoArray(retVal.(*ObjectRef).jobject, rType)
+		converted, err := env.ToGoArray(retVal.(*ObjectRef).jobject, rType)
 		deleteLocalRef(env.jniEnv, retVal.(*ObjectRef).jobject)
 		if err != nil {
 			return err
@@ -1290,7 +1297,7 @@ func (o *ObjectRef) CallNonvirtualMethod(env *Env, className string, methodName 
 		return v.ConvertToGo(retVal.(*ObjectRef))
 	} else if rType.isArray() && rType != Object|Array {
 		// If return type is an array of convertable java to go types, do the conversion
-		converted, err := env.toGoArray(retVal.(*ObjectRef).jobject, rType)
+		converted, err := env.ToGoArray(retVal.(*ObjectRef).jobject, rType)
 		deleteLocalRef(env.jniEnv, retVal.(*ObjectRef).jobject)
 		if err != nil {
 			return err
@@ -1391,7 +1398,7 @@ func (j *Env) CallStaticMethod(className string, methodName string, dest interfa
 		return v.ConvertToGo(retVal.(*ObjectRef))
 	} else if rType.isArray() && rType != Object|Array {
 		// If return type is an array of convertable java to go types, do the conversion
-		converted, err := j.toGoArray(retVal.(*ObjectRef).jobject, rType)
+		converted, err := j.ToGoArray(retVal.(*ObjectRef).jobject, rType)
 		deleteLocalRef(j.jniEnv, retVal.(*ObjectRef).jobject)
 		if err != nil {
 			return err
@@ -1512,7 +1519,7 @@ func (o *ObjectRef) GetField(env *Env, fieldName string, dest interface{}) error
 		return v.ConvertToGo(fieldVal.(*ObjectRef))
 	} else if fType.isArray() && fType != Object|Array {
 		// If return type is an array of convertable java to go types, do the conversion
-		converted, err := env.toGoArray(fieldVal.(*ObjectRef).jobject, fType)
+		converted, err := env.ToGoArray(fieldVal.(*ObjectRef).jobject, fType)
 		deleteLocalRef(env.jniEnv, fieldVal.(*ObjectRef).jobject)
 		if err != nil {
 			return err
@@ -1623,7 +1630,7 @@ func (o *ObjectRef) SetField(env *Env, fieldName string, value interface{}) erro
 	case jobj:
 		setObjectField(env.jniEnv, o.jobject, fid, v.jobj())
 	case []bool, []byte, []int16, []uint16, []int32, []int, []int64, []float32, []float64:
-		array, err := env.toJavaArray(v)
+		array, err := env.ToJavaArray(v)
 		if err != nil {
 			return err
 		}
@@ -1656,7 +1663,7 @@ func (j *Env) GetStaticField(className string, fieldName string, dest interface{
 		return v.ConvertToGo(fieldVal.(*ObjectRef))
 	} else if fType.isArray() && fType != Object|Array {
 		// If return type is an array of convertable java to go types, do the conversion
-		converted, err := j.toGoArray(fieldVal.(*ObjectRef).jobject, fType)
+		converted, err := j.ToGoArray(fieldVal.(*ObjectRef).jobject, fType)
 		deleteLocalRef(j.jniEnv, fieldVal.(*ObjectRef).jobject)
 		if err != nil {
 			return err
@@ -1767,7 +1774,7 @@ func (j *Env) SetStaticField(className string, fieldName string, value interface
 	case jobj:
 		setStaticObjectField(j.jniEnv, class, fid, v.jobj())
 	case []bool, []byte, []int16, []uint16, []int32, []int, []int64, []float32, []float64:
-		array, err := j.toJavaArray(v)
+		array, err := j.ToJavaArray(v)
 		if err != nil {
 			return err
 		}
