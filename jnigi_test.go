@@ -5,12 +5,14 @@
 package jnigi
 
 import (
-	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var env *Env
@@ -30,6 +32,7 @@ func TestAll(t *testing.T) {
 	PTestPushPopLocalFrame(t)
 	PTestHandleException(t)
 	PTestCast(t)
+	PTestNonVirtual(t)
 	PTestRegisterNative(t)
 	PTestDestroy(t)
 }
@@ -436,23 +439,49 @@ func PTestPushPopLocalFrame(t *testing.T) {
 	}
 }
 
+func runWithStderrRedir(f func() error) error {
+	// redirect standard err
+	stdErrFd := int(os.Stderr.Fd())
+	newFd, err := syscall.Dup(stdErrFd)
+	if err != nil {
+		return err
+	}
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 000)
+	if err != nil {
+		return err
+	}
+	syscall.Dup2(int(devNull.Fd()), stdErrFd)
+	err = f()
+	syscall.Dup2(newFd, stdErrFd)
+
+	return err
+}
+
+func newObjWithStderrRedir(class string) error {
+	err := runWithStderrRedir(func() error {
+		_, err := env.NewObject(class)
+		return err
+	})
+	return err
+}
+
 func PTestHandleException(t *testing.T) {
 	jexceptErrMsg := "Java exception occurred. check stderr/logcat"
-	if _, err := env.NewObject("java/foo/bar"); err == nil {
+	if err := newObjWithStderrRedir("java/foo/bar"); err == nil {
 		t.Fatal("did not return error")
 	} else if !assert.Equal(t, jexceptErrMsg, err.Error()) {
 		t.Fatal("did not return standard error")
 	}
 
 	env.ExceptionHandler = ThrowableToStringExceptionHandler
-	if _, err := env.NewObject("java/foo/bar"); err == nil {
+	if err := newObjWithStderrRedir("java/foo/bar"); err == nil {
 		t.Fatal("did not return error")
 	} else if !assert.Equal(t, "java.lang.NoClassDefFoundError: java/foo/bar", err.Error()) {
 		t.Fatal("did not return standard error")
 	}
 
 	env.ExceptionHandler = ThrowableErrorExceptionHandler
-	if _, err := env.NewObject("java/foo/bar"); err == nil {
+	if err := newObjWithStderrRedir("java/foo/bar"); err == nil {
 		t.Fatal("did not return error")
 	} else {
 		throwableError, ok := err.(ThrowableError)
@@ -507,11 +536,12 @@ func PTestHandleException(t *testing.T) {
 
 	env.ExceptionHandler = nil
 
-	if _, err := env.NewObject("java/foo/bar"); err == nil {
+	if err := newObjWithStderrRedir("java/foo/bar"); err == nil {
 		t.Fatal("did not return error")
 	} else if !assert.Equal(t, jexceptErrMsg, err.Error()) {
 		t.Error("did not return standard error")
 	}
+
 }
 
 func PTestCast(t *testing.T) {
@@ -524,6 +554,21 @@ func PTestCast(t *testing.T) {
 	var goBytes []byte
 	if err := c.Cast("java/lang/String").CallMethod(env, "getBytes", &goBytes, env.GetUTF8String()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func PTestNonVirtual(t *testing.T) {
+	obj, err := env.NewObject("local/JnigiTestExtend")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var val int
+	if err := obj.CallNonvirtualMethod(env, "local/JnigiTestBase", "meaning", &val); err != nil {
+		t.Fatal(err)
+	}
+
+	if !assert.Equal(t, 42, val) {
+		t.Fail()
 	}
 }
 
