@@ -5,10 +5,14 @@
 package jnigi
 
 import (
-	"github.com/stretchr/testify/assert"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var env *Env
@@ -28,6 +32,8 @@ func TestAll(t *testing.T) {
 	PTestPushPopLocalFrame(t)
 	PTestHandleException(t)
 	PTestCast(t)
+	PTestNonVirtual(t)
+	PTestRegisterNative(t)
 	PTestDestroy(t)
 }
 
@@ -39,7 +45,8 @@ func PTestInit(t *testing.T) {
 		t.Fatal(err)
 	}
 	runtime.LockOSThread()
-	jvm2, e2, err := CreateJVM(NewJVMInitArgs(false, true, DEFAULT_VERSION, []string{"-Xcheck:jni"}))
+	cwd, _ := os.Getwd()
+	jvm2, e2, err := CreateJVM(NewJVMInitArgs(false, true, DEFAULT_VERSION, []string{"-Xcheck:jni", "-Djava.class.path=" + filepath.Join(cwd, "java/test/out")}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,6 +66,7 @@ func PTestBasic(t *testing.T) {
 	if err := obj.CallMethod(env, "hashCode", &v); err != nil {
 		t.Fatal(err)
 	}
+	env.DeleteLocalRef(obj)
 
 	// test env.GetUTF8String() should be independent of PrecalculateSignature
 	sigStr := "dummy"
@@ -75,6 +83,7 @@ func PTestBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(str)
 	var goBytes []byte
 	if err := str.CallMethod(env, "getBytes", &goBytes, env.GetUTF8String()); err != nil {
 		t.Fatal(err)
@@ -88,6 +97,8 @@ func PTestBasic(t *testing.T) {
 	if err := str.CallMethod(env, "substring", str2, 6); err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(str2)
+
 	var dummy []byte
 	if err := str2.CallMethod(env, "getBytes", &dummy); err != nil {
 		t.Fatal(err)
@@ -109,10 +120,17 @@ func PTestBasic(t *testing.T) {
 	}
 
 	// get static field
+	err = env.SetStaticField("java/util/Calendar", "APRIL", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var calPos int
 	err = env.GetStaticField("java/util/Calendar", "APRIL", &calPos)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !assert.Equal(t, 5, calPos) {
+		t.Fail()
 	}
 
 	// set/get object field
@@ -120,6 +138,8 @@ func PTestBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(pt)
+
 	err = pt.SetField(env, "x", 5)
 	if err != nil {
 		t.Fatal(err)
@@ -142,6 +162,7 @@ func PTestBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(str)
 
 	if err := str.CallMethod(env, "getBytes", &goBytes, env.GetUTF8String()); err != nil {
 		t.Fatal(err)
@@ -179,6 +200,8 @@ func PTestAttach(t *testing.T) {
 	}()
 
 	<-x
+	env.DeleteGlobalRef(gObj)
+	env.DeleteLocalRef(obj)
 }
 
 func PTestObjectArrays(t *testing.T) {
@@ -187,11 +210,12 @@ func PTestObjectArrays(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	defer env.DeleteLocalRef(str)
 	regex, err := env.NewObject("java/lang/String", []byte("X"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(regex)
 
 	v := NewObjectArrayRef("java/lang/String")
 	if err := str.CallMethod(env, "split", v, regex); err != nil {
@@ -217,10 +241,12 @@ func PTestObjectArrays(t *testing.T) {
 	if err := array.CallMethod(env, "getClass", class); err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(class)
 	jClassName := NewObjectRef("java/lang/String")
 	if err := class.CallMethod(env, "getName", jClassName); err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(jClassName)
 	var className []byte
 	if err := jClassName.CallMethod(env, "getBytes", &className); err != nil {
 		t.Fatal(err)
@@ -260,6 +286,7 @@ func PTestConvert(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(str)
 
 	var firstWord GoString
 	if err := str.CallMethod(env, "substring", &firstWord, 0, 4); err != nil {
@@ -275,11 +302,14 @@ func PTestInstanceOf(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(alist)
 
 	str, err := env.NewObject("java/lang/String")
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(str)
+
 	var dummy bool
 	if err := alist.CallMethod(env, "add", &dummy, str.Cast("java/lang/Object")); err != nil {
 		t.Fatal(err)
@@ -289,6 +319,7 @@ func PTestInstanceOf(t *testing.T) {
 	if err := alist.CallMethod(env, "get", obj, 0); err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(obj)
 
 	if isInstance, err := obj.IsInstanceOf(env, "java/lang/String"); err != nil {
 		t.Fatal(err)
@@ -309,12 +340,14 @@ func PTestByteArray(t *testing.T) {
 	if !assert.Equal(t, "hello", toGoStr(t, str)) {
 		t.Fail()
 	}
+	env.DeleteLocalRef(str)
 
 	testStr := "hello world"
 	str, err = env.NewObject("java/lang/String", []byte(testStr))
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer env.DeleteLocalRef(str)
 
 	arr := NewArrayRef(Byte | Array)
 	if err := str.CallMethod(env, "getBytes", arr, env.GetUTF8String()); err != nil {
@@ -322,11 +355,17 @@ func PTestByteArray(t *testing.T) {
 	}
 
 	ba2 := env.NewByteArrayFromObject(arr.ObjectRef)
-	bytes = ba2.GetCritical(env)
+
+	bytes = ba2.CopyBytes(env)
 	if !assert.Equal(t, "hello world", string(bytes)) {
 		t.Fail()
 	}
-	ba2.ReleaseCritical(env, bytes)
+
+	ba3 := env.NewByteArrayFromSlice([]byte("hello world!"))
+	bytes = ba3.CopyBytes(env)
+	if !assert.Equal(t, "hello world!", string(bytes)) {
+		t.Fail()
+	}
 }
 
 func PTestGetJVM(t *testing.T) {
@@ -400,23 +439,49 @@ func PTestPushPopLocalFrame(t *testing.T) {
 	}
 }
 
+func runWithStderrRedir(f func() error) error {
+	// redirect standard err
+	stdErrFd := int(os.Stderr.Fd())
+	newFd, err := syscall.Dup(stdErrFd)
+	if err != nil {
+		return err
+	}
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 000)
+	if err != nil {
+		return err
+	}
+	syscall.Dup2(int(devNull.Fd()), stdErrFd)
+	err = f()
+	syscall.Dup2(newFd, stdErrFd)
+
+	return err
+}
+
+func newObjWithStderrRedir(class string) error {
+	err := runWithStderrRedir(func() error {
+		_, err := env.NewObject(class)
+		return err
+	})
+	return err
+}
+
 func PTestHandleException(t *testing.T) {
 	jexceptErrMsg := "Java exception occurred. check stderr/logcat"
-	if _, err := env.NewObject("java/foo/bar"); err == nil {
+	if err := newObjWithStderrRedir("java/foo/bar"); err == nil {
 		t.Fatal("did not return error")
 	} else if !assert.Equal(t, jexceptErrMsg, err.Error()) {
 		t.Fatal("did not return standard error")
 	}
 
 	env.ExceptionHandler = ThrowableToStringExceptionHandler
-	if _, err := env.NewObject("java/foo/bar"); err == nil {
+	if err := newObjWithStderrRedir("java/foo/bar"); err == nil {
 		t.Fatal("did not return error")
 	} else if !assert.Equal(t, "java.lang.NoClassDefFoundError: java/foo/bar", err.Error()) {
 		t.Fatal("did not return standard error")
 	}
 
 	env.ExceptionHandler = ThrowableErrorExceptionHandler
-	if _, err := env.NewObject("java/foo/bar"); err == nil {
+	if err := newObjWithStderrRedir("java/foo/bar"); err == nil {
 		t.Fatal("did not return error")
 	} else {
 		throwableError, ok := err.(ThrowableError)
@@ -471,11 +536,12 @@ func PTestHandleException(t *testing.T) {
 
 	env.ExceptionHandler = nil
 
-	if _, err := env.NewObject("java/foo/bar"); err == nil {
+	if err := newObjWithStderrRedir("java/foo/bar"); err == nil {
 		t.Fatal("did not return error")
 	} else if !assert.Equal(t, jexceptErrMsg, err.Error()) {
 		t.Error("did not return standard error")
 	}
+
 }
 
 func PTestCast(t *testing.T) {
@@ -488,6 +554,43 @@ func PTestCast(t *testing.T) {
 	var goBytes []byte
 	if err := c.Cast("java/lang/String").CallMethod(env, "getBytes", &goBytes, env.GetUTF8String()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func PTestNonVirtual(t *testing.T) {
+	obj, err := env.NewObject("local/JnigiTestExtend")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var val int
+	if err := obj.CallNonvirtualMethod(env, "local/JnigiTestBase", "meaning", &val); err != nil {
+		t.Fatal(err)
+	}
+
+	if !assert.Equal(t, 42, val) {
+		t.Fail()
+	}
+}
+
+func PTestRegisterNative(t *testing.T) {
+	if err := env.RegisterNative("local/JnigiTesting", "Greet", ObjectType("java/lang/String"), []interface{}{ObjectType("java/lang/String")}, c_go_callback_Greet); err != nil {
+		t.Fatal(err)
+	}
+	objRef, err := env.NewObject("local/JnigiTesting")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nameRef, err := env.NewObject("java/lang/String", []byte("World"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	strRef := NewObjectRef("java/lang/String")
+	if err := objRef.CallMethod(env, "Greet", strRef, nameRef); err != nil {
+		t.Fatal(err)
+	}
+	goStr := toGoStr(t, strRef)
+	if !assert.Equal(t, "Hello World!", goStr) {
+		t.Fail()
 	}
 }
 

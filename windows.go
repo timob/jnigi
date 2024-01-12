@@ -32,8 +32,8 @@ import "C"
 
 import (
 	"errors"
-	"unsafe"
 	"golang.org/x/sys/windows"
+	"unsafe"
 )
 
 func jni_GetDefaultJavaVMInitArgs(args unsafe.Pointer) jint {
