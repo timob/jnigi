@@ -10,7 +10,7 @@ This allows for Go to initiate the JVM or Java to start a Go runtime respectivel
 ## Install
 ``` bash
 # In your apps Go module directory
-go get tekao.net/jingi
+go get tekao.net/jnigi
 
 # Add flags needed to include JNI header files, change this as appropriate for your JDK and OS
 export CGO_CFLAGS="-I/usr/lib/jvm/default-java/include -I/usr/lib/jvm/default-java/include/linux"
