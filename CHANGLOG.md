@@ -1,6 +1,7 @@
 # Change Log
 
 ## v2.0.0-alpha.1
+- Update dependencies
 - Include more tests of package functions
 - Update tests to use github.com/stretchr/testify
 - Export ToGoArray, ToJavaArray methods
