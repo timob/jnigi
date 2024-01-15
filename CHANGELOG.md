@@ -1,6 +1,7 @@
 # Change Log
 
 ## v2.0.0-alpha.1
+- Add VERSION file
 - Update dependencies
 - Include more tests of package functions
 - Update tests to use github.com/stretchr/testify
