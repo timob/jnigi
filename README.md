@@ -5,7 +5,7 @@ A package to access Java from Go code. Can be used from a Go executable or share
 This allows for Go to initiate the JVM or Java to start a Go runtime respectively.
 
 [![Go Reference](https://pkg.go.dev/badge/tekao.net/jnigi.svg)](https://pkg.go.dev/tekao.net/jnigi)
-https://github.com/timob/jnigi/actions/workflows/ci_test.yaml/badge.svg [![Actions](https://github.com/timob/jnigi/actions?query=branch%3Amaster)](https://github.com/timob/jnigi/actions/workflows/ci_test.yaml/badge.svg)
+https://github.com/timob/jnigi/actions/workflows/ci_test.yaml/badge.svg [![Actions](https://github.com/timob/jnigi/actions/workflows/ci_test.yaml/badge.svg)](https://github.com/timob/jnigi/actions?query=branch%3Amaster)
 
 ## Install
 ``` bash
