@@ -1,42 +1,50 @@
 # JNIGI
-Java Native Interface Go Interface.
+JNI Go Interface.
 
 A package to access Java from Go code. Can be used from a Go executable or shared library.
 This allows for Go to initiate the JVM or Java to start a Go runtime respectively.
 
-Docs: https://pkg.go.dev/tekao.net/jnigi
+[![Go Reference](https://pkg.go.dev/badge/tekao.net/jnigi.svg)](https://pkg.go.dev/tekao.net/jnigi)
+https://github.com/timob/jnigi/actions/workflows/ci_test.yaml/badge.svg [![Actions](https://github.com/timob/jnigi/actions?query=branch%3Amaster)](https://github.com/timob/jnigi/actions/workflows/ci_test.yaml/badge.svg)
 
-## v1
-As of 2021-12-05 the master branch will be version 2. Packages that used JNIGI before this should update their go.mod to set v1 as the
-version. Or update their code to be compatible with version 2.
+## Install
+``` bash
+# In your apps Go module directory
+go get tekao.net/jingi
 
-## Compile
-The `CGO_CFLAGS` needs to be set to add the JNI C header files. The `compilevars.sh` script will do
-this.
+# Add flags needed to include JNI header files, change this as appropriate for your JDK and OS
+export CGO_CFLAGS="-I/usr/lib/jvm/default-java/include -I/usr/lib/jvm/default-java/include/linux"
+
+# build your app
+go build
 ```
-# put this in your build script
-source <gopath>/src/tekao.net/jnigi/compilevars.sh <root path of jdk>
-```
-
-On Windows you can use `compilevars.bat` in the same way (but you don't need `source` at the begining).
-
+The `compilevars.sh` (`compilevars.bat` on Windows) script can help setting the `CGO_CFLAGS` environment variable.
 
 ## Finding JVM at Runtime
-Use the `LoadJVMLib(jvmLibPath string) error` function to load the shared library at run time.
+The JVM library is dynamically linked at run time. Use the `LoadJVMLib(jvmLibPath string) error` function to load the shared library at run time.
 There is a function `AttemptToFindJVMLibPath() string` to help to find the library path.
 
 ## Status
-* Has been used in Go (many versions since 1.6) executable multi threaded applications on Linux / Windows.
-* Tests for main functions are present.
+### Testing
+Most of the code has tests. To run the tests using docker:
+``` bash
+# get source
+git clone https://github.com/timob/jnigi.git
 
-## Changes
-* 2022-07-29 Android support, see https://github.com/timob/jnigi/issues/55
-* 2021-12-05 Version 2: New idiomatic API. Converter interfaces. Add docs.
-* 2020-12-09 Add go.mod file, updated import path to tekao.net/jnigi.
-* 2020-08-21 Add ExceptionHandler interface for handling Java exceptions. Add 3 general handlers DescribeExceptionHandler (default), ThrowableToStringExceptionHandler and ThrowableErrorExceptionHandler.
-* 2020-08-11 Add DestroyJavaVM support, JNI_VERSION_1_8 const
-* 2019-05-29 Better multiplatform support, dynamic loading of JVM library.
-* 2016-08-01 Initial version.
+cd jnigi
+
+# build image
+docker build -t jnigi_test .
+
+# run tests
+docker run jnigi_test
+```
+
+### Uses
+Has been used on Linux/Windows/MacOS (amd64) Android (arm64) multi threaded apps.
+
+### Note about using on Windows
+Because of the way the JVM triggers OS exceptions during `CreateJavaVM`, which the Go runtime treats as unhandled exceptions, the code for the Go runtime needs to be changed to allow the JVM to handle the exceptions. See https://github.com/timob/jnigi/issues/31#issuecomment-1668914368 for how to do this.
 
 ## Example
 
