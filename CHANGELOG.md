@@ -1,6 +1,9 @@
 # Change Log
 
 ## v2.0.0-alpha.2
+- Fix bug go file naming convetion for tests
+
+## v2.0.0-alpha.2
 - Fixed bug with float arguments to methods
 - Add tests for all basic types/arrays as arguments and return values
 
