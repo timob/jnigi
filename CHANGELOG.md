@@ -1,5 +1,9 @@
 # Change Log
 
+## v2.0.0-alpha.2
+- Fixed bug with float arguments to methods
+- Add tests for all basic types/arrays as arguments and return values
+
 ## v2.0.0-alpha.1
 - Add VERSION file
 - Update dependencies
