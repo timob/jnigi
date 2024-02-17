@@ -22,6 +22,7 @@ var jvm *JVM
 func TestAll(t *testing.T) {
 	PTestInit(t)
 	PTestBasic(t)
+	PTestTypes(t)
 	PTestObjectArrays(t)
 	PTestConvert(t)
 	PTestInstanceOf(t)

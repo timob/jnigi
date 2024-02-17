@@ -860,6 +860,8 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 		return nil, nil, nil
 	}
 
+	// use uint64 to represent a jval (c union)
+	// this is a conversion, but afaik it only effects floats.
 	argList := make([]uint64, len(args))
 	refs = make([]jobject, 0)
 
@@ -889,9 +891,11 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 		case int64:
 			argList[i] = uint64(jlong(v))
 		case float32:
-			argList[i] = uint64(jfloat(v))
+			// copy value to avoid conversion
+			*((*float32)(unsafe.Pointer(&argList[i]))) = float32(jfloat(v))
 		case float64:
-			argList[i] = uint64(jdouble(v))
+			// copy value to avoid conversion
+			*((*float64)(unsafe.Pointer(&argList[i]))) = float64(jdouble(v))
 		case []bool, []byte, []int16, []uint16, []int32, []int, []int64, []float32, []float64:
 			if array, arrayErr := j.ToJavaArray(v); arrayErr == nil {
 				argList[i] = uint64(array)
