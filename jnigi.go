@@ -224,10 +224,7 @@ func (j *JVM) AttachCurrentThread() *Env {
 
 // DetachCurrentThread calls JNI DetachCurrentThread, pass Env returned from AttachCurrentThread for current thread.
 func (j *JVM) DetachCurrentThread(env *Env) error {
-	//free cache
-	for _, v := range env.classCache {
-		deleteGlobalRef(env.jniEnv, jobject(v))
-	}
+	env.DeleteGlobalRefCache()
 
 	if detachCurrentThread(j.javaVM) < 0 {
 		return errors.New("JNIGI: detachCurrentThread error")
@@ -1907,6 +1904,15 @@ func (j *Env) GetUTF8String() *ObjectRef {
 	}
 
 	return utf8
+}
+
+// DeleteGlobalRefCache deletes all globalRef that are in classCache. This methods should
+// be called when an instance of *Env gets out of scope
+func (j *Env) DeleteGlobalRefCache() {
+	for _, v := range j.classCache {
+		deleteGlobalRef(j.jniEnv, jobject(v))
+	}
+	j.classCache = make(map[string]jclass)
 }
 
 // StackTraceElement is a struct holding the contents of java.lang.StackTraceElement

@@ -35,6 +35,7 @@ func TestAll(t *testing.T) {
 	PTestCast(t)
 	PTestNonVirtual(t)
 	PTestRegisterNative(t)
+	PTestDeleteGlobalRefCache(t)
 	PTestDestroy(t)
 }
 
@@ -378,6 +379,7 @@ func PTestGetJVM(t *testing.T) {
 }
 
 func PTestDestroy(t *testing.T) {
+	env.DeleteGlobalRefCache()
 	err := jvm.Destroy()
 	if err != nil {
 		t.Fatalf("DestroyJVM failed %s", err)
@@ -591,6 +593,24 @@ func PTestRegisterNative(t *testing.T) {
 	}
 	goStr := toGoStr(t, strRef)
 	if !assert.Equal(t, "Hello World!", goStr) {
+		t.Fail()
+	}
+}
+
+func PTestDeleteGlobalRefCache(t *testing.T) {
+	str, err := env.NewObject("java/lang/String", []byte("hello world"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer env.DeleteLocalRef(str)
+	var goBytes []byte
+	if err := str.CallMethod(env, "getBytes", &goBytes); err != nil {
+		t.Fatal(err)
+	}
+
+	env.DeleteGlobalRefCache()
+
+	if !assert.Empty(t, env.classCache) {
 		t.Fail()
 	}
 }
