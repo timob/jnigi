@@ -17,6 +17,7 @@ import "C"
 //export go_callback_Greet
 func go_callback_Greet(jenv unsafe.Pointer, jobj uintptr, arg_0 uintptr) uintptr {
 	env := WrapEnv(jenv)
+	defer env.DeleteGlobalRefCache()
 	env.ExceptionHandler = ThrowableToStringExceptionHandler
 
 	strArgRef := WrapJObject(arg_0, "java/lang/String", false)
