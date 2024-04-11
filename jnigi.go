@@ -204,6 +204,22 @@ func UseJVM(pvm unsafe.Pointer, penv unsafe.Pointer, thiz unsafe.Pointer) (*JVM,
 	return jvm, env
 }
 
+// A reference to a class loader object
+type ClassLoaderRef struct {
+	ref unsafe.Pointer
+}
+
+// Get a class loader object from an existing object obj
+func (r *Env) GetClassLoader(obj *ObjectRef) *ClassLoaderRef {
+	classLoader := getClassLoader(r.jniEnv, (unsafe.Pointer)(obj.jobject))
+	return &ClassLoaderRef{classLoader}
+}
+
+// Set the env to look up classes using classloader, (it still fall back to JNI findClass function)
+func (r *Env) SetClassLoader(classLoader *ClassLoaderRef) {
+	r.addtlClassLoader = classLoader.ref
+}
+
 // AttachCurrentThread calls JNI AttachCurrentThread.
 // Must call runtime.LockOSThread() first.
 func (j *JVM) AttachCurrentThread() *Env {
@@ -224,10 +240,7 @@ func (j *JVM) AttachCurrentThread() *Env {
 
 // DetachCurrentThread calls JNI DetachCurrentThread, pass Env returned from AttachCurrentThread for current thread.
 func (j *JVM) DetachCurrentThread(env *Env) error {
-	//free cache
-	for _, v := range env.classCache {
-		deleteGlobalRef(env.jniEnv, jobject(v))
-	}
+	env.DeleteGlobalRefCache()
 
 	if detachCurrentThread(j.javaVM) < 0 {
 		return errors.New("JNIGI: detachCurrentThread error")
@@ -860,6 +873,8 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 		return nil, nil, nil
 	}
 
+	// use uint64 to represent a jval (c union)
+	// this is a conversion, but afaik it only effects floats.
 	argList := make([]uint64, len(args))
 	refs = make([]jobject, 0)
 
@@ -889,9 +904,11 @@ func (j *Env) createArgs(args []interface{}) (ptr unsafe.Pointer, refs []jobject
 		case int64:
 			argList[i] = uint64(jlong(v))
 		case float32:
-			argList[i] = uint64(jfloat(v))
+			// copy value to avoid conversion
+			*((*float32)(unsafe.Pointer(&argList[i]))) = float32(jfloat(v))
 		case float64:
-			argList[i] = uint64(jdouble(v))
+			// copy value to avoid conversion
+			*((*float64)(unsafe.Pointer(&argList[i]))) = float64(jdouble(v))
 		case []bool, []byte, []int16, []uint16, []int32, []int, []int64, []float32, []float64:
 			if array, arrayErr := j.ToJavaArray(v); arrayErr == nil {
 				argList[i] = uint64(array)
@@ -1903,6 +1920,15 @@ func (j *Env) GetUTF8String() *ObjectRef {
 	}
 
 	return utf8
+}
+
+// DeleteGlobalRefCache deletes all globalRef that are in classCache. This methods should
+// be called when an instance of *Env gets out of scope
+func (j *Env) DeleteGlobalRefCache() {
+	for _, v := range j.classCache {
+		deleteGlobalRef(j.jniEnv, jobject(v))
+	}
+	j.classCache = make(map[string]jclass)
 }
 
 // StackTraceElement is a struct holding the contents of java.lang.StackTraceElement
