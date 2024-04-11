@@ -204,6 +204,19 @@ func UseJVM(pvm unsafe.Pointer, penv unsafe.Pointer, thiz unsafe.Pointer) (*JVM,
 	return jvm, env
 }
 
+type ClassLoaderRef struct {
+	ref unsafe.Pointer
+}
+
+func (r *Env) GetClassLoader(obj *ObjectRef) *ClassLoaderRef {
+	classLoader := getClassLoader(r.jniEnv, (unsafe.Pointer)(obj.jobject))
+	return &ClassLoaderRef{classLoader}
+}
+
+func (r *Env) SetClassLoader(classLoader *ClassLoaderRef) {
+	r.addtlClassLoader = classLoader.ref
+}
+
 // AttachCurrentThread calls JNI AttachCurrentThread.
 // Must call runtime.LockOSThread() first.
 func (j *JVM) AttachCurrentThread() *Env {
