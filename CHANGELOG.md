@@ -1,5 +1,11 @@
 # Change Log
 
+## v3.0.0
+- change go module name to github.com/timob/jnigi
+
+## v2.0.0
+- tagged as v2 v2.0.0 in repo
+
 ## v2.0.0-alpha.4
 - add functions to get/set classloader lookup
 - add DeleteGlobalRefCache (jairobjunior)
