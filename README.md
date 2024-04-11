@@ -7,6 +7,9 @@ This allows for Go to initiate the JVM or Java to start a Go runtime respectivel
 [![Go Reference](https://pkg.go.dev/badge/github.com/timob/jnigi.svg)](https://pkg.go.dev/github.com/timob/jnigi)
 [![Actions](https://github.com/timob/jnigi/actions/workflows/ci_test.yaml/badge.svg)](https://github.com/timob/jnigi/actions?query=branch%3Amaster)
 
+## Module name change
+The go module name is renamed to `github.com/timob/jnigi` in the branch. Checkout `v2` if you want to retain the old name.
+
 ## Install
 ``` bash
 # In your apps Go module directory
