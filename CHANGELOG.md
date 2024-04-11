@@ -1,5 +1,12 @@
 # Change Log
 
+## v2.0.0-alpha.4
+- add functions to get/set classloader lookup
+- add DeleteGlobalRefCache (jairobjunior)
+
+## v2.0.0-alpha.3
+- fix tests
+
 ## v2.0.0-alpha.2
 - Fix bug go file naming convetion for tests
 
