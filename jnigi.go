@@ -204,15 +204,18 @@ func UseJVM(pvm unsafe.Pointer, penv unsafe.Pointer, thiz unsafe.Pointer) (*JVM,
 	return jvm, env
 }
 
+// A reference to a class loader object
 type ClassLoaderRef struct {
 	ref unsafe.Pointer
 }
 
+// Get a class loader object from an existing object obj
 func (r *Env) GetClassLoader(obj *ObjectRef) *ClassLoaderRef {
 	classLoader := getClassLoader(r.jniEnv, (unsafe.Pointer)(obj.jobject))
 	return &ClassLoaderRef{classLoader}
 }
 
+// Set the env to look up classes using classloader, (it still fall back to JNI findClass function)
 func (r *Env) SetClassLoader(classLoader *ClassLoaderRef) {
 	r.addtlClassLoader = classLoader.ref
 }
